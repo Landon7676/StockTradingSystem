@@ -126,20 +126,9 @@ make clean
 
 ---
 
-## **Future Improvements**
-
-- Add **Docker** support for easier setup.
-- Implement **unit tests** for database interactions.
-
----
-
 ## **Contributors**
 
 - Landon7676 (@Landon7676)
 - jharwick23 (@jharwick23)
 
 ---
-
-## **License**
-
-This project is licensed under the **MIT License**. Feel free to modify and use it!
