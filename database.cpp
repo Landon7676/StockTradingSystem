@@ -74,8 +74,67 @@ bool initializeDatabase(const std::string &dbName) {
     return true;
 }
 
-bool addUser(const std::string &first_name, const std::string &last_name,
-             const std::string &user_name, const std::string &password, double balance);
+bool addUser(const std::string &first_name,
+             const std::string &last_name,
+             const std::string &user_name,
+             const std::string &password,
+             double balance)
+{
+    sqlite3 *db = nullptr;
+
+    // Open the database
+    int rc = sqlite3_open("trading.db", &db);
+    if (rc != SQLITE_OK) {
+        std::cerr << "Error opening database: " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_close(db);
+        return false;
+    }
+
+    // Prepare the SQL statement
+    const char *sql = R"(
+        INSERT INTO Users (first_name, last_name, user_name, password, usd_balance)
+        VALUES (?, ?, ?, ?, ?);
+    )";
+    sqlite3_stmt *stmt = nullptr;
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        std::cerr << "Error preparing statement: " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_close(db);
+        return false;
+    }
+
+    // Bind parameters
+    rc = sqlite3_bind_text(stmt, 1, first_name.c_str(), -1, SQLITE_TRANSIENT);
+    rc |= sqlite3_bind_text(stmt, 2, last_name.c_str(), -1, SQLITE_TRANSIENT);
+    rc |= sqlite3_bind_text(stmt, 3, user_name.c_str(), -1, SQLITE_TRANSIENT);
+    rc |= sqlite3_bind_text(stmt, 4, password.c_str(), -1, SQLITE_TRANSIENT);
+    rc |= sqlite3_bind_double(stmt, 5, balance);
+
+    if (rc != SQLITE_OK) {
+        std::cerr << "Error binding parameters: " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return false;
+    }
+
+    // Execute
+    rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE) {
+        std::cerr << "Error executing insert: " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return false;
+    }
+
+    // Cleanup
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+
+    std::cout << "User '" << user_name << "' added successfully.\n";
+    return true;
+}
+
+
 void listUsers();
 double getUserBalance(int userId);
 bool updateUserBalance(int userId, double newBalance);

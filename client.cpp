@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+using namespace std;
 
 #define SERVER_PORT 5432
 #define MAX_LINE 256
@@ -12,21 +13,21 @@ int main(int argc, char *argv[]) {
     struct hostent *hp;
     struct sockaddr_in sin;
     char buf[MAX_LINE];
-    std::string host;
+    string host;
     int s, len;
 
     // Validate command-line arguments
     if (argc == 2) {
         host = argv[1];
     } else {
-        std::cerr << "Usage: simplex-talk <host>" << std::endl;
+        cerr << "Usage: simplex-talk <host>" << std::endl;
         return 1;
     }
 
     // Translate host name into peer's IP address
     hp = gethostbyname(host.c_str());
     if (!hp) {
-        std::cerr << "simplex-talk: unknown host: " << host << std::endl;
+        cerr << "simplex-talk: unknown host: " << host << std::endl;
         return 1;
     }
 
@@ -48,14 +49,14 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    std::cout << "Connected to server at " << host << ":" << SERVER_PORT << std::endl;
+    cout << "Connected to server at " << host << ":" << SERVER_PORT << endl;
 
     // Main loop: get and send lines of text, then receive the echo
     while (true) {
-        std::cout << "Enter message: ";
-        std::cin.getline(buf, MAX_LINE);
+        cout << "Enter command: ";
+        cin.getline(buf, MAX_LINE);
 
-        if (std::cin.eof()) {
+        if (cin.eof()) {
             break;
         }
 
@@ -66,22 +67,26 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        // Receive the echoed message from the server
+        // Receive response from server
         len = recv(s, buf, sizeof(buf), 0);
         if (len > 0) {
             buf[len] = '\0'; // Null-terminate the received data
-            std::cout << "Echo from server: " << buf << std::endl;
-        } else if (len == 0) {
-            std::cout << "Server disconnected." << std::endl;
+
+            cout << "Server Response: " << buf << endl;
+        }
+
+        else if (len == 0){
+            cout << "Server disconnected.\n";
             break;
-        } else {
-            perror("Receive failed");
+        }
+        else{
+            perror("Recieve failed");
             break;
         }
     }
 
     // Close the socket
     close(s);
-    std::cout << "Connection closed." << std::endl;
+    cout << "Connection closed." << endl;
     return 0;
 }
