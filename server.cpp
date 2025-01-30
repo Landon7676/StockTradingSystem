@@ -120,6 +120,29 @@ int main() {
                     send(new_s, errorMsg.c_str(), errorMsg.size(), 0);
                 }
             }
+            else if (command == "BUY"){}
+            else if (command == "SELL"){
+            }
+            else if (command == "LIST")
+            {
+                /* code */
+            }
+            else if (command == "BALANCE")
+            {
+                /* code */
+            }
+            else if (command == "SHUTDOWN")
+            {
+                /* code */
+            }
+            else if (command == "QUIT")
+            {
+                /* code */
+            }
+            
+            
+            
+            
             else {
                 std::string errorMsg = "ERROR: Unknown command\n";
                 send(new_s, errorMsg.c_str(), errorMsg.size(), 0);
