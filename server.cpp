@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <string>
+#include "database.h"
 
 #define SERVER_PORT 5432
 #define MAX_PENDING 5
@@ -14,6 +15,15 @@ int main() {
     char buf[MAX_LINE];
     int addr_len = sizeof(sin);
     int s, new_s;
+
+    // Initialize the database when the server starts
+    std::string dbName = "trading.db";
+    if (!initializeDatabase(dbName)) {
+        std::cerr << "Failed to initialize database!" << std::endl;
+        return 1;  // Exit if the database setup fails
+    }
+
+    std::cout << "Database initialized. Server is ready to accept connections.\n";
 
     // Build address data structure
     memset(&sin, 0, sizeof(sin));

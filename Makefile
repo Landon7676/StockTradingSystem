@@ -1,6 +1,6 @@
 # Compiler and Flags
 CXX = g++
-CXXFLAGS = -Wall -Wextra -std=c++17
+CXXFLAGS = -Wall -Wextra -std=c++17 -I/usr/include  # Added -I/usr/include
 LDFLAGS = -lsqlite3  # Link SQLite3
 
 # Source Files
