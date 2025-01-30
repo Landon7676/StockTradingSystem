@@ -4,6 +4,7 @@
 #include <sqlite3.h>
 #include <string>
 #include "database.h"
+#include <iostream>
 
 bool openDatabase(sqlite3 **db, const std::string &dbName) {
     int rc = sqlite3_open(dbName.c_str(), db);
