@@ -37,3 +37,6 @@ server
 
 # Databases
 trading.db
+
+#vsCode
+.vscode
