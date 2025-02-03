@@ -1,4 +1,4 @@
-  #include <iostream>
+#include <iostream>
 #include <cstring>
 #include <cstdlib>
 #include <unistd.h>
@@ -6,8 +6,6 @@
 #include <string>
 #include <sstream>
 #include "database.h"
-
-using namespace std;
 
 #define SERVER_PORT 5432
 #define MAX_PENDING 5
@@ -19,13 +17,11 @@ int main() {
     int addr_len = sizeof(sin);
     int s, new_s;
 
-    // Initialize the database
+    // Initialize the database when the server starts
     std::string dbName = "trading.db";
-    sqlite3 *db = nullptr;
-
-    if (!openDatabase(&db, dbName) || !initializeDatabase(dbName)) {
+    if (!initializeDatabase(dbName)) {
         std::cerr << "Failed to initialize database!" << std::endl;
-        return 1;
+        return 1;  // Exit if the database setup fails
     }
 
     std::cout << "Database initialized. Server is ready to accept connections.\n";
@@ -42,7 +38,7 @@ int main() {
         exit(1);
     }
 
-    if (::bind(s, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
+    if (bind(s, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
         perror("Bind failed");
         exit(1);
     }
@@ -54,7 +50,7 @@ int main() {
 
     std::cout << "Server listening on port " << SERVER_PORT << "..." << std::endl;
 
-    // Main server loop
+    // Main server loop: accept new clients, then read their messages
     while (true) {
         if ((new_s = accept(s, (struct sockaddr *)&sin, (socklen_t *)&addr_len)) < 0) {
             perror("Accept failed");
@@ -65,95 +61,145 @@ int main() {
 
         // Process messages from this client until they disconnect
         while (true) {
-            memset(buf, 0, sizeof(buf)); // Clear buffer
+            memset(buf, 0, sizeof(buf)); // Clear the buffer
             int buf_len = recv(new_s, buf, sizeof(buf), 0);
             if (buf_len <= 0) {
                 std::cout << "Client disconnected.\n";
                 break;
             }
 
-            buf[buf_len] = '\0'; // Null-terminate received string
+            // Null-terminate the received string to safely use it
+            buf[buf_len] = '\0';
+
+            // Convert the received C-string into a std::string for easier parsing
             std::string input(buf);
+
+            // Parse the command
             std::istringstream iss(input);
-            std::string command;
+            std::string command, stock_symbol;
+            double stock_amount, price_per_stock;
+            int user_id;
             iss >> command;
 
-            if (command == "ADD_USER") {
-                std::string firstName, lastName, userName, password;
-                double balance;
+            if (command == "BUY") {
+                // Extract required parameters
+                if (!(iss >> stock_symbol >> stock_amount >> price_per_stock >> user_id)) {
+                    std::cerr << "Invalid BUY command format received: " << input << std::endl;
+                    std::string errorMsg = "400 Bad Request: Invalid BUY format\n";
+                    send(new_s, errorMsg.c_str(), errorMsg.length(), 0);
+                    continue;
+                }
 
-                if (iss >> firstName >> lastName >> userName >> password >> balance) {
-                    bool result = addUser(firstName, lastName, userName, password, balance);
-                    std::string response = result ? "ADD_USER success\n" : "ADD_USER fail\n";
-                    send(new_s, response.c_str(), response.size(), 0);
+                // Log received command
+                std::cout << "s: Received: BUY " << stock_symbol << " " << stock_amount 
+                          << " " << price_per_stock << " " << user_id << std::endl;
+
+                // Attempt to process the stock purchase
+                if (buyStock(stock_symbol, stock_symbol, stock_amount, price_per_stock, user_id, dbName)) {
+                    // Get updated user balance and stock balance
+                    double new_usd_balance = 0.0;
+                    double new_stock_balance = 0.0;
+
+                    // Query updated balances
+                    sqlite3 *db;
+                    sqlite3_stmt *stmt;
+                    if (openDatabase(&db, dbName)) {
+                        const char *getBalanceSQL = "SELECT usd_balance FROM Users WHERE ID = ?;";
+                        sqlite3_prepare_v2(db, getBalanceSQL, -1, &stmt, nullptr);
+                        sqlite3_bind_int(stmt, 1, user_id);
+
+                        if (sqlite3_step(stmt) == SQLITE_ROW) {
+                            new_usd_balance = sqlite3_column_double(stmt, 0);
+                        }
+
+                        sqlite3_finalize(stmt);
+
+                        const char *getStockSQL = "SELECT stock_balance FROM Stocks WHERE stock_symbol = ? AND user_id = ?;";
+                        sqlite3_prepare_v2(db, getStockSQL, -1, &stmt, nullptr);
+                        sqlite3_bind_text(stmt, 1, stock_symbol.c_str(), -1, SQLITE_STATIC);
+                        sqlite3_bind_int(stmt, 2, user_id);
+
+                        if (sqlite3_step(stmt) == SQLITE_ROW) {
+                            new_stock_balance = sqlite3_column_double(stmt, 0);
+                        }
+
+                        sqlite3_finalize(stmt);
+                        sqlite3_close(db);
+                    }
+
+                    std::ostringstream response;
+                    response << "200 OK\nBOUGHT: New balance: " << new_stock_balance 
+                             << " " << stock_symbol << ". USD balance $" << new_usd_balance << "\n";
+                    send(new_s, response.str().c_str(), response.str().length(), 0);
+                } 
+                else {
+                    std::string errorMsg = "400 Bad Request: Transaction failed\n";
+                    send(new_s, errorMsg.c_str(), errorMsg.length(), 0);
+                }
+            } 
+            else if (command == "SELL") {
+                // Extract required parameters
+                if (!(iss >> stock_symbol >> stock_amount >> price_per_stock >> user_id)) {
+                    std::cerr << "Invalid SELL command format received: " << input << std::endl;
+                    std::string errorMsg = "400 Bad Request: Invalid SELL format\n";
+                    send(new_s, errorMsg.c_str(), errorMsg.length(), 0);
+                    continue;
+                }
+
+                // Log received command
+                std::cout << "s: Received: SELL " << stock_symbol << " " << stock_amount 
+                          << " " << price_per_stock << " " << user_id << std::endl;
+
+                // Attempt to process the stock sale
+                if (sellStock(stock_symbol, stock_amount, price_per_stock, user_id, dbName)) {
+                    double new_usd_balance = 0.0;
+                    double new_stock_balance = 0.0;
+
+                    // Query updated balances
+                    sqlite3 *db;
+                    sqlite3_stmt *stmt;
+                    if (openDatabase(&db, dbName)) {
+                        const char *getBalanceSQL = "SELECT usd_balance FROM Users WHERE ID = ?;";
+                        sqlite3_prepare_v2(db, getBalanceSQL, -1, &stmt, nullptr);
+                        sqlite3_bind_int(stmt, 1, user_id);
+
+                        if (sqlite3_step(stmt) == SQLITE_ROW) {
+                            new_usd_balance = sqlite3_column_double(stmt, 0);
+                        }
+
+                        sqlite3_finalize(stmt);
+
+                        const char *getStockSQL = "SELECT stock_balance FROM Stocks WHERE stock_symbol = ? AND user_id = ?;";
+                        sqlite3_prepare_v2(db, getStockSQL, -1, &stmt, nullptr);
+                        sqlite3_bind_text(stmt, 1, stock_symbol.c_str(), -1, SQLITE_STATIC);
+                        sqlite3_bind_int(stmt, 2, user_id);
+
+                        if (sqlite3_step(stmt) == SQLITE_ROW) {
+                            new_stock_balance = sqlite3_column_double(stmt, 0);
+                        }
+                        
+                        sqlite3_finalize(stmt);
+                        sqlite3_close(db);
+                    }
+
+                    std::ostringstream response;
+                    response << "200 OK\nSOLD: New balance: " << new_stock_balance 
+                             << " " << stock_symbol << ". USD $" << new_usd_balance << "\n";
+                    send(new_s, response.str().c_str(), response.str().length(), 0);
                 } else {
-                    std::string errorMsg = "ERROR: Invalid ADD_USER format. Use: ADD_USER firstName lastName userName password balance\n";
-                    send(new_s, errorMsg.c_str(), errorMsg.size(), 0);
+                    std::string errorMsg = "400 Bad Request: Transaction failed\n";
+                    send(new_s, errorMsg.c_str(), errorMsg.length(), 0);
                 }
             }
-            else if (command == "LIST_USERS") {
-                // Implement listUsers() logic and send data back
-                listUsers(); // This currently prints to stdout; modify it to return results
-                std::string successMsg = "LIST_USERS executed.\n";
-                send(new_s, successMsg.c_str(), successMsg.size(), 0);
-            }
-            else if (command == "GET_BALANCE") {
-                int userId;
-                if (iss >> userId) {
-                    double balance = getUserBalance(userId);
-                    std::string response = "BALANCE: " + std::to_string(balance) + "\n";
-                    send(new_s, response.c_str(), response.size(), 0);
-                } else {
-                    std::string errorMsg = "ERROR: Invalid GET_BALANCE format. Use: GET_BALANCE userID\n";
-                    send(new_s, errorMsg.c_str(), errorMsg.size(), 0);
-                }
-            }
-            else if (command == "UPDATE_BALANCE") {
-                int userId;
-                double newBalance;
-                if (iss >> userId >> newBalance) {
-                    bool result = updateUserBalance(userId, newBalance);
-                    std::string response = result ? "UPDATE_BALANCE success\n" : "UPDATE_BALANCE fail\n";
-                    send(new_s, response.c_str(), response.size(), 0);
-                } else {
-                    std::string errorMsg = "ERROR: Invalid UPDATE_BALANCE format. Use: UPDATE_BALANCE userID newBalance\n";
-                    send(new_s, errorMsg.c_str(), errorMsg.size(), 0);
-                }
-            }
-            else if (command == "BUY"){}
-            else if (command == "SELL"){
-            }
-            else if (command == "LIST")
-            {
-                /* code */
-            }
-            else if (command == "BALANCE")
-            {
-                /* code */
-            }
-            else if (command == "SHUTDOWN")
-            {
-                /* code */
-            }
-            else if (command == "QUIT")
-            {
-                /* code */
-            }
-            
-            
-            
-            
             else {
-                std::string errorMsg = "ERROR: Unknown command\n";
-                send(new_s, errorMsg.c_str(), errorMsg.size(), 0);
+                std::string unknownCmd = "400 Bad Request: Unknown Command\n";
+                send(new_s, unknownCmd.c_str(), unknownCmd.length(), 0);
             }
         }
 
         close(new_s);
     }
 
-    // Close the database connection when the server shuts down
-    sqlite3_close(db);
     close(s);
     return 0;
 }

@@ -3,13 +3,23 @@
 
 #include <sqlite3.h>
 #include <string>
+#include <iostream>
 
 bool openDatabase(sqlite3 **db, const std::string &dbName);
-bool initializeDatabase(const std::string &dbName);
-bool addUser(const std::string &first_name, const std::string &last_name,
-             const std::string &user_name, const std::string &password, double balance);
-void listUsers();
-double getUserBalance(int userId);
-bool updateUserBalance(int userId, double newBalance);
 
-#endif
+bool initializeDatabase(const std::string &dbName);
+
+bool buyStock(const std::string &stock_symbol,
+              const std::string &stock_name,
+              double amount,
+              double price_per_stock,
+              int user_id,
+              const std::string &dbName);
+
+bool sellStock(const std::string &stock_symbol,
+               double amount,
+               double price_per_stock,
+               int user_id,
+               const std::string &dbName);
+
+#endif 
