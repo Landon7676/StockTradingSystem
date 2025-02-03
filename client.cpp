@@ -59,6 +59,11 @@ int main(int argc, char *argv[]) {
         if (cin.eof()) {
             break;
         }
+        
+        if (strcmp(buf, "QUIT") == 0){
+            cout << "200 OK" << endl;
+            break;
+        }
 
         // Send the message to the server
         len = strlen(buf) + 1;
