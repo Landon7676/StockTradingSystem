@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <string>
 #include <sstream>
+#include <sqlite3.h>
 #include "database.h"
 
 #define SERVER_PORT 5432
@@ -191,10 +192,78 @@ int main() {
                     send(new_s, errorMsg.c_str(), errorMsg.length(), 0);
                 }
             }
-            else {
-                std::string unknownCmd = "400 Bad Request: Unknown Command\n";
-                send(new_s, unknownCmd.c_str(), unknownCmd.length(), 0);
-            }
+          else if (command == "LIST") {
+    // Log received command
+    std::cout << "s: Received: LIST" << std::endl;
+
+    // Prepare the response
+    std::ostringstream response;
+
+    // Initialize the SQLite database pointer and statement pointer
+    sqlite3 *db;
+    sqlite3_stmt *stmt;
+    const char *dbName = "trading.db"; // Ensure this is your database path
+
+    if (openDatabase(&db, dbName)) {
+        const char *schemaQuery = "SELECT name FROM sqlite_master WHERE type='table' AND name='Stocks';";
+        
+        // Prepare the schema query to check if 'Stocks' table exists
+        int schemaRc = sqlite3_prepare_v2(db, schemaQuery, -1, &stmt, nullptr);
+        if (schemaRc != SQLITE_OK) {
+            std::cerr << "Failed to prepare schema query: " << sqlite3_errmsg(db) << std::endl;
+            sqlite3_finalize(stmt);
+            sqlite3_close(db);
+            return 0;  // Stop further execution if schema query fails
+        }
+
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            std::cout << "Stocks table exists." << std::endl;
+        } else {
+            std::cout << "Stocks table does not exist." << std::endl;
+            sqlite3_finalize(stmt);
+            sqlite3_close(db);
+            return 0;  // Stop if the table does not exist
+        }
+        sqlite3_finalize(stmt); // Finalize the schema check statement
+        
+        const char *query = "SELECT ID, stock_symbol, stock_name, stock_balance, user_id FROM Stocks;";
+        
+        // Prepare the SELECT statement to get stocks
+        int rc = sqlite3_prepare_v2(db, query, -1, &stmt, nullptr);
+        if (rc != SQLITE_OK) {
+            std::cerr << "Failed to prepare SELECT statement: " << sqlite3_errmsg(db) << std::endl;
+            sqlite3_finalize(stmt);
+            sqlite3_close(db);
+            std::string errorMsg = "400 Bad Request: Unable to list stocks\n";
+            send(new_s, errorMsg.c_str(), errorMsg.length(), 0);
+            return 0;  // Stop further execution if query preparation fails
+        }
+
+        // Start building the response
+        response << "200 OK\nThe list of stocks:\n";
+
+        // Iterate over the query results
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            int stock_id = sqlite3_column_int(stmt, 0);
+            const char *stock_symbol = (const char *)sqlite3_column_text(stmt, 1);
+            const char *stock_name = (const char *)sqlite3_column_text(stmt, 2);
+            double stock_balance = sqlite3_column_double(stmt, 3);
+            int user_id = sqlite3_column_int(stmt, 4);
+
+            // Append the data to the response
+            response << stock_id << " " << stock_symbol << " " << stock_name << " " << stock_balance << " " << user_id << "\n";
+        }
+
+        sqlite3_finalize(stmt); // Finalize the SELECT statement
+        sqlite3_close(db);      // Close the database connection
+
+        // Send the response to the client
+        send(new_s, response.str().c_str(), response.str().length(), 0);
+    } else {
+        std::string errorMsg = "400 Bad Request: Unable to open database\n";
+        send(new_s, errorMsg.c_str(), errorMsg.length(), 0);
+    }
+}        
         }
 
         close(new_s);

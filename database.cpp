@@ -7,6 +7,7 @@
 #include <iostream>
 
 bool openDatabase(sqlite3 **db, const std::string &dbName) {
+    std::cout << "Opening database at path: " << dbName << std::endl;
     int rc = sqlite3_open(dbName.c_str(), db);
     if (rc != SQLITE_OK) {
         std::cerr << "Error opening database: " << sqlite3_errmsg(*db) << std::endl;
@@ -15,7 +16,6 @@ bool openDatabase(sqlite3 **db, const std::string &dbName) {
     std::cout << "Database '" << dbName << "' opened successfully.\n";
     return true;
 }
-
 bool initializeDatabase(const std::string &dbName) {
     sqlite3 *db = nullptr;
     if (!openDatabase(&db, dbName)) {
@@ -23,8 +23,8 @@ bool initializeDatabase(const std::string &dbName) {
     }
 
     char *errMsg = nullptr;
+    sqlite3_stmt *stmt;
 
-    // Create Users table
     const char *createUsersTable =
         "CREATE TABLE IF NOT EXISTS Users ("
         "ID INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -35,7 +35,6 @@ bool initializeDatabase(const std::string &dbName) {
         "usd_balance DOUBLE NOT NULL"
         ");";
 
-    // Create Stocks table
     const char *createStocksTable =
         "CREATE TABLE IF NOT EXISTS Stocks ("
         "ID INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -46,7 +45,7 @@ bool initializeDatabase(const std::string &dbName) {
         "FOREIGN KEY (user_id) REFERENCES Users(ID) ON DELETE CASCADE"
         ");";
 
-    // Execute table creation
+    // Create Users table
     int rc = sqlite3_exec(db, createUsersTable, nullptr, nullptr, &errMsg);
     if (rc != SQLITE_OK) {
         std::cerr << "Error creating Users table: " << errMsg << std::endl;
@@ -55,6 +54,7 @@ bool initializeDatabase(const std::string &dbName) {
         return false;
     }
 
+    // Create Stocks table
     rc = sqlite3_exec(db, createStocksTable, nullptr, nullptr, &errMsg);
     if (rc != SQLITE_OK) {
         std::cerr << "Error creating Stocks table: " << errMsg << std::endl;
@@ -63,49 +63,44 @@ bool initializeDatabase(const std::string &dbName) {
         return false;
     }
 
-    // Check if there is at least one user in the database
+    // Check if there is at least one user
     const char *checkUserSQL = "SELECT COUNT(*) FROM Users;";
-    sqlite3_stmt *stmt;
-    int user_count = 0;
-
     rc = sqlite3_prepare_v2(db, checkUserSQL, -1, &stmt, nullptr);
     if (rc == SQLITE_OK) {
+        int user_count = 0;
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             user_count = sqlite3_column_int(stmt, 0);
         }
         sqlite3_finalize(stmt);
+
+        if (user_count == 0) {
+            std::cout << "No users found. Creating default user..." << std::endl;
+            const char *insertDefaultUser = R"(
+                INSERT INTO Users (first_name, last_name, user_name, password, usd_balance)
+                VALUES ('John', 'Doe', 'admin', 'password', 100.00);
+            )";
+
+            rc = sqlite3_exec(db, insertDefaultUser, nullptr, nullptr, &errMsg);
+            if (rc != SQLITE_OK) {
+                std::cerr << "Error inserting default user: " << errMsg << std::endl;
+                sqlite3_free(errMsg);
+                sqlite3_close(db);
+                return false;
+            }
+            std::cout << "Default user created successfully. (Username: admin, Password: password, Balance: $100.00)" << std::endl;
+        } else {
+            std::cout << "User(s) found in the database. No default user needed." << std::endl;
+        }
     } else {
         std::cerr << "Error checking user count: " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_finalize(stmt);
         sqlite3_close(db);
         return false;
-    }
-
-    // If no users exist, insert a default user
-    if (user_count == 0) {
-        std::cout << "No users found. Creating default user...\n";
-
-        const char *insertDefaultUser = R"(
-            INSERT INTO Users (first_name, last_name, user_name, password, usd_balance)
-            VALUES ('John', 'Doe', 'admin', 'password', 100.00);
-        )";
-
-        rc = sqlite3_exec(db, insertDefaultUser, nullptr, nullptr, &errMsg);
-        if (rc != SQLITE_OK) {
-            std::cerr << "Error inserting default user: " << errMsg << std::endl;
-            sqlite3_free(errMsg);
-            sqlite3_close(db);
-            return false;
-        }
-
-        std::cout << "Default user created successfully. (Username: admin, Password: password, Balance: $100.00)\n";
-    } else {
-        std::cout << "User(s) found in the database. No default user needed.\n";
     }
 
     sqlite3_close(db);
     return true;
 }
-
 
 bool buyStock(const std::string &stock_symbol,
               const std::string &stock_name,
@@ -427,6 +422,45 @@ bool sellStock(const std::string &stock_symbol,
     sqlite3_close(db);
     return true;
 }
+    bool listStock(const std::string &dbName, int user_id) {
+    sqlite3 *db;
+    sqlite3_stmt *stmt;
+    
+    if (openDatabase(&db, dbName)) {
+        const char *listStocksSQL = "SELECT id, stock_symbol, stock_balance, user_id FROM Stocks WHERE user_id = ?;";
 
+        // Prepare the SQL query
+        if (sqlite3_prepare_v2(db, listStocksSQL, -1, &stmt, nullptr) != SQLITE_OK) {
+            std::cerr << "Error preparing LIST query: " << sqlite3_errmsg(db) << std::endl;
+            sqlite3_finalize(stmt);
+            sqlite3_close(db);
+            return false;
+        }
+
+        // Bind user_id to the query
+        sqlite3_bind_int(stmt, 1, user_id);
+
+        // Iterate through the results
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            int id = sqlite3_column_int(stmt, 0);
+            const char *stock_symbol = (const char *)sqlite3_column_text(stmt, 1);
+            double stock_balance = sqlite3_column_double(stmt, 2);
+            int user_id = sqlite3_column_int(stmt, 3);
+
+            // Print or process the stock record (you could also return this data)
+            std::cout << "ID: " << id << ", Symbol: " << stock_symbol 
+                      << ", Balance: " << stock_balance << ", User ID: " << user_id << std::endl;
+        }
+
+        // Clean up
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+    } else {
+        std::cerr << "Failed to open the database!" << std::endl;
+        return false;
+    }
+
+    return true;
+}
 
 #endif
