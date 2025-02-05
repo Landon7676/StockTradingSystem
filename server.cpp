@@ -299,28 +299,32 @@ int main()
                     send(new_s, errorMsg.c_str(), errorMsg.length(), 0);
                 }
             }
-            else if (command == "BALANCE") {
-    std::cout << "s: Received: BALANCE" << std::endl;
+            else if (command == "BALANCE")
+            {
+                std::cout << "s: Received: BALANCE" << std::endl;
 
-    int user_id = 1; // Always show balance for user 1
-    std::string first_name, last_name;
-    double usd_balance;
-    
-    if (getUserBalance(user_id, first_name, last_name, usd_balance, dbName)) {
-        std::ostringstream response;
-        response << "200 OK\n"
-                 << "Balance for user " << first_name << " " << last_name
-                 << ": $" << usd_balance << "\n";
-        std::string responseStr = response.str();
-        
-        std::cout << "Sending response: " << responseStr;  // Debug log
-        send(new_s, responseStr.c_str(), responseStr.length(), 0);
-    } else {
-        std::string errorMsg = "404 Not Found\nUser with ID " + std::to_string(user_id) + " does not exist.\n";
-        std::cout << "Sending error response: " << errorMsg;  // Debug log
-        send(new_s, errorMsg.c_str(), errorMsg.length(), 0);
-    }
-}
+                int user_id = 1; // Always show balance for user 1
+                std::string first_name, last_name;
+                double usd_balance;
+
+                if (getUserBalance(user_id, first_name, last_name, usd_balance, dbName))
+                {
+                    std::ostringstream response;
+                    response << "200 OK\n"
+                             << "Balance for user " << first_name << " " << last_name
+                             << ": $" << usd_balance << "\n";
+                    std::string responseStr = response.str();
+
+                    std::cout << "Sending response: " << responseStr; // Debug log
+                    send(new_s, responseStr.c_str(), responseStr.length(), 0);
+                }
+                else
+                {
+                    std::string errorMsg = "404 Not Found\nUser with ID " + std::to_string(user_id) + " does not exist.\n";
+                    std::cout << "Sending error response: " << errorMsg; // Debug log
+                    send(new_s, errorMsg.c_str(), errorMsg.length(), 0);
+                }
+            }
 
             else if (command == "SHUTDOWN")
             {

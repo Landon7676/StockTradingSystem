@@ -40,3 +40,6 @@ trading.db
 
 #vsCode
 .vscode
+
+#PropertyListFile
+*.dSYM/
