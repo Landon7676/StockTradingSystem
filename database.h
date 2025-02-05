@@ -22,6 +22,5 @@ bool sellStock(const std::string &stock_symbol,
                int user_id,
                const std::string &dbName);
 bool listStock(const std::string &dbName);
-                
 
-#endif 
+#endif

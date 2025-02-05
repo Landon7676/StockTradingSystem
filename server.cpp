@@ -18,6 +18,7 @@ int main()
     char buf[MAX_LINE];
     int addr_len = sizeof(sin);
     int s, new_s;
+    bool shutdownRequested = false;
 
     // Initialize the database when the server starts
     std::string dbName = "trading.db";
@@ -57,7 +58,7 @@ int main()
     std::cout << "Server listening on port " << SERVER_PORT << "..." << std::endl;
 
     // Main server loop: accept new clients, then read their messages
-    while (true)
+    while (!shutdownRequested)
     {
         if ((new_s = accept(s, (struct sockaddr *)&sin, (socklen_t *)&addr_len)) < 0)
         {
@@ -298,9 +299,26 @@ int main()
                     send(new_s, errorMsg.c_str(), errorMsg.length(), 0);
                 }
             }
+            else if (command == "SHUTDOWN")
+            {
+                std::cout << "Received: SHUTDOWN" << std::endl;
+                shutdownRequested = true;
+                break;
+            }
+            else
+            {
+                std::string errorMsg = "400 Bad Request: Invalid Command\n";
+                send(new_s, errorMsg.c_str(), errorMsg.length(), 0);
+            }
         }
 
         close(new_s);
+        // If shutdown is requested, break from the outer loop too
+        if (shutdownRequested)
+        {
+            std::cout << "Shutting down the server..." << std::endl;
+            break;
+        }
     }
 
     close(s);
