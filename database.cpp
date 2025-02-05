@@ -516,5 +516,32 @@ bool listStock(const std::string &dbName, int user_id)
 
     return true;
 }
+bool getUserBalance(int user_id, std::string &first_name, std::string &last_name, double &usd_balance, const std::string &dbName) {
+    sqlite3 *db;
+    sqlite3_stmt *stmt;
+    if (!openDatabase(&db, dbName)) return false;
+
+    const char *query = "SELECT first_name, last_name, usd_balance FROM Users WHERE ID = ?;";
+    if (sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_close(db);
+        return false;
+    }
+
+    sqlite3_bind_int(stmt, 1, user_id);
+
+    bool found = false;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        first_name = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0));
+        last_name = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1));
+        usd_balance = sqlite3_column_double(stmt, 2);
+        found = true;
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return found;
+}
+
 
 #endif
