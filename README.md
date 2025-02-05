@@ -100,32 +100,6 @@ To remove compiled files:
 make clean
 ```
 
----
-
-## **Troubleshooting**
-
-- **SQLite3 not found?**  
-  Run:
-
-  ```sh
-  sudo apt install sqlite3 libsqlite3-dev -y
-  ```
-
-- **Makefile error on Windows?**  
-  Install `make` via **Chocolatey**:
-
-  ```sh
-  choco install make -y
-  ```
-
-- **Server not responding?**  
-  Check if it's listening on the correct **IP and port** using:
-  ```sh
-  netstat -tulnp | grep server
-  ```
-
----
-
 ## **Contributors**
 
 - Landon7676 (@Landon7676)
