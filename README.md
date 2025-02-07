@@ -1,3 +1,9 @@
+## **Contributors**
+
+- Landon Johnson (landonj@umich.edu)
+- Jackson Harwick (@jharwick23)
+
+
 # Stock Trading System
 
 A simple stock trading system with a **client-server** architecture using **SQLite3**.
@@ -99,10 +105,11 @@ To remove compiled files:
 ```sh
 make clean
 ```
-
-## **Contributors**
-
-- Landon7676 (@Landon7676)
-- jharwick23 (@jharwick23)
-
 ---
+
+## **Student Roles**
+
+
+
+
+
