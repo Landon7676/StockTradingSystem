@@ -79,3 +79,12 @@ rm -f server client sqlite3.o
 - Worked on **BUY**, **SELL**, **SHUTDOWN**, and **QUIT** commands.
 - Wrote the **README** file.
 - Implemented the above commands into both the **client** and **server**.
+
+### Landon Johnson
+- Implemented the initial **Client.cpp** and **Server.cpp** files
+- Worked on **LIST** and **BALANCE** commands
+- Implemented these commands into the **client** and **server**
+
+## **Bugs**
+
+-Header file acting like it's not included but still working when included.
