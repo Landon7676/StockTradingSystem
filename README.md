@@ -5,34 +5,15 @@
 
 # Stock Trading System
 
-A simple stock trading system with a **client-server** architecture using **SQLite3**.
+A simple stock trading system with a **client-server** architecture.
+
+## **Introduction**
+
+This project is written in **C++** and is designed to work on **Linux, macOS, and Windows**. It implements a stock trading system using a client-server model with local SQLite database integration.
 
 ## **Setup Instructions**
 
-### **1. Install Required Dependencies**
-
-Before running the project, install **SQLite3** (needed for the database).
-
-#### **For Ubuntu/WSL:**
-
-```sh
-sudo apt update && sudo apt install sqlite3 libsqlite3-dev -y
-```
-
-#### **For macOS (Homebrew):**
-
-```sh
-brew install sqlite3
-```
-
-#### **For Windows (MinGW or MSYS2):**
-
-1. Download **SQLite3** from [sqlite.org](https://www.sqlite.org/download.html).
-2. Install it and add it to your system's PATH.
-
----
-
-### **2. Clone the Repository**
+### **1. Clone the Repository**
 
 ```sh
 git clone https://github.com/Landon7676/StockTradingSystem.git
@@ -41,7 +22,7 @@ cd StockTradingSystem
 
 ---
 
-### **3. Compile the Project Manually**
+### **2. Compile the Project**
 
 #### **Compile SQLite separately**
 
@@ -63,7 +44,7 @@ g++ -o client client.cpp
 
 ---
 
-### **4. Run the Server**
+### **3. Run the Server**
 
 ```sh
 ./server
@@ -71,7 +52,7 @@ g++ -o client client.cpp
 
 ---
 
-### **5. Run the Client**
+### **4. Run the Client**
 
 ```sh
 ./client localhost
@@ -81,7 +62,7 @@ Replace `localhost` with the **server IP** if running on a separate machine.
 
 ---
 
-### **6. Clean Up**
+### **5. Clean Up**
 
 To remove compiled files:
 
@@ -92,3 +73,7 @@ rm -f server client sqlite3.o
 ---
 
 ## **Student Roles**
+
+## **Bugs**
+
+Header file acting like it's not included but still working when included.
