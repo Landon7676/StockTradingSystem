@@ -1,7 +1,7 @@
 ## **Contributors**
 
 - Landon Johnson (landonj@umich.edu)
-- Jackson Harwick (@jharwick23)
+- Jackson Harwick (jharwick@umich.edu)
 
 # Stock Trading System
 
@@ -81,6 +81,7 @@ rm -f server client sqlite3.o
 - Implemented the above commands into both the **client** and **server**.
 
 ### Landon Johnson
+
 - Implemented the initial **client.cpp** and **server.cpp** files
 - Worked on **LIST** and **BALANCE** commands
 - Implemented these commands into the **client** and **server**
@@ -88,4 +89,3 @@ rm -f server client sqlite3.o
 ## **Bugs**
 
 -Header file acting like it's not included but still working when included.
-
