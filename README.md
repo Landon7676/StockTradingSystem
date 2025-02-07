@@ -1,7 +1,7 @@
 ## **Contributors**
 
 - Landon Johnson (landonj@umich.edu)
-- Jackson Harwick (jharwick@umich.edu)
+- Jackson Harwick (@jharwick23)
 
 # Stock Trading System
 
@@ -22,7 +22,7 @@ cd StockTradingSystem
 
 ---
 
-### **2. Compile the Project**
+### **2. Compile the Project Manually**
 
 #### **Compile SQLite separately**
 
@@ -74,6 +74,8 @@ rm -f server client sqlite3.o
 
 ## **Student Roles**
 
-## **Bugs**
+### Jackson Harwick
 
-Header file acting like it's not included but still working when included.
+- Worked on **BUY**, **SELL**, **SHUTDOWN**, and **QUIT** commands.
+- Wrote the **README** file.
+- Implemented the above commands into both the **client** and **server**.
