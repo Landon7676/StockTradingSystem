@@ -103,6 +103,16 @@ int main()
                     continue;
                 }
 
+                // Check for negative numbers in the BUY command parameters.
+                // If any negative value is provided, reject the command.
+                if (stock_amount < 0 || price_per_stock < 0 || user_id < 0)
+                {
+                    std::cerr << "Invalid BUY command: Negative values are not allowed (" << input << ")" << std::endl;
+                    std::string errorMsg = "400 Bad Request: Negative values are not permitted in BUY command\n";
+                    send(new_s, errorMsg.c_str(), errorMsg.length(), 0);
+                    continue;
+                }
+
                 // Log received command
                 std::cout << "s: Received: BUY " << stock_symbol << " " << stock_amount
                           << " " << price_per_stock << " " << user_id << std::endl;
@@ -162,6 +172,15 @@ int main()
                 {
                     std::cerr << "Invalid SELL command format received: " << input << std::endl;
                     std::string errorMsg = "400 Bad Request: Invalid SELL format\n";
+                    send(new_s, errorMsg.c_str(), errorMsg.length(), 0);
+                    continue;
+                }
+
+                // Check for negative numbers in the SELL command parameters.
+                if (stock_amount < 0 || price_per_stock < 0 || user_id < 0)
+                {
+                    std::cerr << "Invalid SELL command: Negative values are not allowed (" << input << ")" << std::endl;
+                    std::string errorMsg = "400 Bad Request: Negative values are not permitted in SELL command\n";
                     send(new_s, errorMsg.c_str(), errorMsg.length(), 0);
                     continue;
                 }
