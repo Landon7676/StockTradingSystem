@@ -1,11 +1,16 @@
 # Compiler and Flags
 CXX = g++
-CXXFLAGS = -Wall -Wextra -std=c++17 -I/usr/include  # Added -I/usr/include
-LDFLAGS = -lsqlite3  # Link SQLite3
+CC = gcc
+CXXFLAGS = -Wall -Wextra -std=c++17
+CFLAGS = -Wall -Wextra
+LDFLAGS = -lpthread -ldl  # Link pthread and dl for SQLite3
 
 # Source Files
-SRCS = client.cpp server.cpp database.cpp
+SRCS = client.cpp server.cpp database.cpp sqlite3.c
 OBJS = $(SRCS:.cpp=.o)
+
+# SQLite3 Object File
+SQLITE_OBJ = sqlite3.o
 
 # Executables
 SERVER = server
@@ -14,9 +19,13 @@ CLIENT = client
 # Default Target
 all: $(SERVER) $(CLIENT)
 
+# Compile SQLite3 separately using GCC
+$(SQLITE_OBJ): sqlite3.c
+	$(CC) $(CFLAGS) -c sqlite3.c -o $(SQLITE_OBJ) $(LDFLAGS)
+
 # Compile Server
-$(SERVER): server.o database.o
-	$(CXX) $(CXXFLAGS) -o $(SERVER) server.o database.o $(LDFLAGS)
+$(SERVER): server.o database.o $(SQLITE_OBJ)
+	$(CXX) $(CXXFLAGS) -o $(SERVER) server.o database.o $(SQLITE_OBJ) $(LDFLAGS)
 
 # Compile Client
 $(CLIENT): client.o
@@ -28,7 +37,7 @@ $(CLIENT): client.o
 
 # Clean Build Files
 clean:
-	rm -f $(OBJS) $(SERVER) $(CLIENT)
+	rm -f $(OBJS) $(SERVER) $(CLIENT) $(SQLITE_OBJ)
 
 # Phony Targets
 .PHONY: all clean

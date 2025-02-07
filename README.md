@@ -1,15 +1,17 @@
+# **Stock Trading System**
+
 ## **Contributors**
 
-- Landon Johnson (landonj@umich.edu)
-- Jackson Harwick (jharwick@umich.edu)
+- **Landon Johnson** (landonj@umich.edu)
+- **Jackson Harwick** (jharwick@umich.edu)
 
-# Stock Trading System
-
-A simple stock trading system with a **client-server** architecture.
+---
 
 ## **Introduction**
 
-This project is written in **C++** and is designed to work on **Linux, macOS, and Windows**. It implements a stock trading system using a client-server model with local SQLite database integration.
+This project is written in **C++** and is designed to work on **Linux, macOS, and Windows**. It implements a stock trading system using a **client-server** model with local **SQLite** database integration.
+
+---
 
 ## **Setup Instructions**
 
@@ -22,21 +24,37 @@ cd StockTradingSystem
 
 ---
 
-### **2. Compile the Project Manually**
+### **2. Compile the Project**
 
-#### **Compile SQLite separately**
+You can compile the project using **Makefile** or manually.
+
+#### **Using Makefile**
+
+To compile both the **server** and **client**, simply run:
+
+```sh
+make
+```
+
+This will compile the SQLite object file and both the server and client programs.
+
+#### **Manual Compilation**
+
+If you prefer manual compilation, follow these steps:
+
+##### **Compile SQLite separately**
 
 ```sh
 gcc -c sqlite3.c -o sqlite3.o -lpthread -ldl
 ```
 
-#### **Compile the Server**
+##### **Compile the Server**
 
 ```sh
 g++ -o server server.cpp database.cpp sqlite3.o -lpthread -ldl
 ```
 
-#### **Compile the Client**
+##### **Compile the Client**
 
 ```sh
 g++ -o client client.cpp
@@ -64,7 +82,15 @@ Replace `localhost` with the **server IP** if running on a separate machine.
 
 ### **5. Clean Up**
 
-To remove compiled files:
+To remove compiled files, use:
+
+#### **Using Makefile**
+
+```sh
+make clean
+```
+
+#### **Manual Cleanup**
 
 ```sh
 rm -f server client sqlite3.o
@@ -74,18 +100,20 @@ rm -f server client sqlite3.o
 
 ## **Student Roles**
 
-### Jackson Harwick
+### **Jackson Harwick**
 
-- Worked on **BUY**, **SELL**, **SHUTDOWN**, and **QUIT** commands.
+- Implemented **BUY**, **SELL**, **SHUTDOWN**, and **QUIT** commands.
 - Wrote the **README** file.
-- Implemented the above commands into both the **client** and **server**.
+- Integrated these commands into both the **client** and **server**.
 
-### Landon Johnson
+### **Landon Johnson**
 
-- Implemented the initial **client.cpp** and **server.cpp** files
-- Worked on **LIST** and **BALANCE** commands
-- Implemented these commands into the **client** and **server**
+- Developed initial **client.cpp** and **server.cpp** files.
+- Implemented **LIST** and **BALANCE** commands.
+- Integrated these commands into the **client** and **server**.
+
+---
 
 ## **Bugs**
 
--Header file acting like it's not included but still working when included.
+- Header file behaves as if it is not included but still functions when explicitly included.
