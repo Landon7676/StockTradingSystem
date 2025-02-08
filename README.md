@@ -84,14 +84,6 @@ Replace `localhost` with the **server IP** if running on a separate machine.
 
 To remove compiled files, use:
 
-#### **Using Makefile**
-
-```sh
-make clean
-```
-
-#### **Manual Cleanup**
-
 ```sh
 rm -f server client sqlite3.o
 ```
@@ -118,3 +110,11 @@ rm -f server client sqlite3.o
 
 - Header file behaves as if it is not included but still functions when explicitly included.
 - Needed to specify version of C++ to compile server
+
+---
+
+## **Demo**
+
+- https://youtu.be/x7-BhXH6xHs
+
+---

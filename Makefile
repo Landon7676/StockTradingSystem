@@ -37,7 +37,7 @@ $(CLIENT): client.o
 
 # Clean Build Files
 clean:
-	rm -f $(OBJS) $(SERVER) $(CLIENT) $(SQLITE_OBJ)
+	rm -f $(OBJS) $(SERVER) $(CLIENT)
 
 # Phony Targets
 .PHONY: all clean
