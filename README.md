@@ -117,3 +117,4 @@ rm -f server client sqlite3.o
 ## **Bugs**
 
 - Header file behaves as if it is not included but still functions when explicitly included.
+- Needed to specify version of C++ to compile server
