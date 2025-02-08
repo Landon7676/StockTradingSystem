@@ -35,9 +35,5 @@ $(CLIENT): client.o
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Clean Build Files
-clean:
-	rm -f $(OBJS) $(SERVER) $(CLIENT)
-
 # Phony Targets
 .PHONY: all clean
