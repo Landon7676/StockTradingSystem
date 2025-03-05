@@ -6,6 +6,7 @@
 #include <string>
 #include <sstream>
 #include <sqlite3.h>
+#include <pthread.h>
 #include "database.h"
 
 #define SERVER_PORT 5432
