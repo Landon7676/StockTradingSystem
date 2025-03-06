@@ -1,8 +1,8 @@
 # Compiler and Flags
 CXX = g++
 CC = gcc
-CXXFLAGS = -Wall -Wextra -std=c++17
-CFLAGS = -Wall -Wextra
+CXXFLAGS = -Wall -Wextra -std=c++17 -I.  # Add current directory for includes
+CFLAGS = -Wall -Wextra -I.  # Add current directory for includes
 LDFLAGS = -lpthread -ldl  # Link pthread and dl for SQLite3
 
 # Source Files

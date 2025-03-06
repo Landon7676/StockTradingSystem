@@ -27,10 +27,302 @@ void* handle_single_thread(void* client_socket){
 
     char buf[MAX_LINE];
 
+	// Debug output to check if client is truly multithreaded
+	std::cout << "[DEBUG] Thread ID: " << pthread_self() << " handling client on socket " << sock << std::endl;
+
+	// Process messages from this client until they disconnect or issue SHUTDOWN
     while (!shutdownRequested)
     {
+		memset(buf, 0, sizeof(buf)); // Clear the buffer
+		int buf_len = recv(sock, buf, sizeof(buf), 0);
+		if (buf_len <= 0)
+		{
+			std::cout << "Client disconnected.\n";
+			break;
+		}
 
+		// Null-terminate the received string to safely use it
+		buf[buf_len] = '\0';
+
+		// Convert the received C-string into a std::string for easier parsing
+		std::string input(buf);
+
+		// Parse the command
+		std::istringstream iss(input);
+		std::string command, stock_symbol;
+		double stock_amount, price_per_stock;
+		int user_id;
+		iss >> command;
+
+		if (command == "BUY")
+		{
+			// Extract required parameters
+			if (!(iss >> stock_symbol >> stock_amount >> price_per_stock >> user_id))
+			{
+				std::cerr << "Invalid BUY command format received: " << input << std::endl;
+				std::string errorMsg = "400 Bad Request: Invalid BUY format\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
+
+			// Check for negative numbers in the BUY command parameters.
+			// If any negative value is provided, reject the command.
+			if (stock_amount < 0 || price_per_stock < 0 || user_id < 0)
+			{
+				std::cerr << "Invalid BUY command: Negative values are not allowed (" << input << ")" << std::endl;
+				std::string errorMsg = "400 Bad Request: Negative values are not permitted in BUY command\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
+
+			// Log received command
+			std::cout << "s: Received: BUY " << stock_symbol << " " << stock_amount
+						<< " " << price_per_stock << " " << user_id << std::endl;
+
+			// Attempt to process the stock purchase
+			if (buyStock(stock_symbol, stock_symbol, stock_amount, price_per_stock, user_id, dbName))
+			{
+				// Get updated user balance and stock balance
+				double new_usd_balance = 0.0;
+				double new_stock_balance = 0.0;
+
+				// Query updated balances
+				sqlite3 *db;
+				sqlite3_stmt *stmt;
+				if (openDatabase(&db, dbName))
+				{
+					const char *getBalanceSQL = "SELECT usd_balance FROM Users WHERE ID = ?;";
+					sqlite3_prepare_v2(db, getBalanceSQL, -1, &stmt, nullptr);
+					sqlite3_bind_int(stmt, 1, user_id);
+
+					if (sqlite3_step(stmt) == SQLITE_ROW)
+					{
+						new_usd_balance = sqlite3_column_double(stmt, 0);
+					}
+
+					sqlite3_finalize(stmt);
+
+					const char *getStockSQL = "SELECT stock_balance FROM Stocks WHERE stock_symbol = ? AND user_id = ?;";
+					sqlite3_prepare_v2(db, getStockSQL, -1, &stmt, nullptr);
+					sqlite3_bind_text(stmt, 1, stock_symbol.c_str(), -1, SQLITE_STATIC);
+					sqlite3_bind_int(stmt, 2, user_id);
+
+					if (sqlite3_step(stmt) == SQLITE_ROW)
+					{
+						new_stock_balance = sqlite3_column_double(stmt, 0);
+					}
+
+					sqlite3_finalize(stmt);
+					sqlite3_close(db);
+				}
+
+				std::ostringstream response;
+				response << "200 OK\nBOUGHT: New balance: " << new_stock_balance
+							<< " " << stock_symbol << ". USD balance $" << new_usd_balance << "\n";
+				send(sock, response.str().c_str(), response.str().length(), 0);
+			}
+			else
+			{
+				std::string errorMsg = "400 Bad Request: Transaction failed\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+			}
+		}
+		else if (command == "SELL")
+		{
+			// Extract required parameters
+			if (!(iss >> stock_symbol >> stock_amount >> price_per_stock >> user_id))
+			{
+				std::cerr << "Invalid SELL command format received: " << input << std::endl;
+				std::string errorMsg = "400 Bad Request: Invalid SELL format\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
+
+			// Check for negative numbers in the SELL command parameters.
+			if (stock_amount < 0 || price_per_stock < 0 || user_id < 0)
+			{
+				std::cerr << "Invalid SELL command: Negative values are not allowed (" << input << ")" << std::endl;
+				std::string errorMsg = "400 Bad Request: Negative values are not permitted in SELL command\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
+
+			// Log received command
+			std::cout << "s: Received: SELL " << stock_symbol << " " << stock_amount
+						<< " " << price_per_stock << " " << user_id << std::endl;
+
+			// Attempt to process the stock sale
+			if (sellStock(stock_symbol, stock_amount, price_per_stock, user_id, dbName))
+			{
+				double new_usd_balance = 0.0;
+				double new_stock_balance = 0.0;
+
+				// Query updated balances
+				sqlite3 *db;
+				sqlite3_stmt *stmt;
+				if (openDatabase(&db, dbName))
+				{
+					const char *getBalanceSQL = "SELECT usd_balance FROM Users WHERE ID = ?;";
+					sqlite3_prepare_v2(db, getBalanceSQL, -1, &stmt, nullptr);
+					sqlite3_bind_int(stmt, 1, user_id);
+
+					if (sqlite3_step(stmt) == SQLITE_ROW)
+					{
+						new_usd_balance = sqlite3_column_double(stmt, 0);
+					}
+
+					sqlite3_finalize(stmt);
+
+					const char *getStockSQL = "SELECT stock_balance FROM Stocks WHERE stock_symbol = ? AND user_id = ?;";
+					sqlite3_prepare_v2(db, getStockSQL, -1, &stmt, nullptr);
+					sqlite3_bind_text(stmt, 1, stock_symbol.c_str(), -1, SQLITE_STATIC);
+					sqlite3_bind_int(stmt, 2, user_id);
+
+					if (sqlite3_step(stmt) == SQLITE_ROW)
+					{
+						new_stock_balance = sqlite3_column_double(stmt, 0);
+					}
+
+					sqlite3_finalize(stmt);
+					sqlite3_close(db);
+				}
+
+				std::ostringstream response;
+				response << "200 OK\nSOLD: New balance: " << new_stock_balance
+							<< " " << stock_symbol << ". USD $" << new_usd_balance << "\n";
+				send(sock, response.str().c_str(), response.str().length(), 0);
+			}
+			else
+			{
+				std::string errorMsg = "400 Bad Request: Transaction failed\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+			}
+		}
+		else if (command == "LIST")
+		{
+			// Log received command
+			std::cout << "s: Received: LIST" << std::endl;
+
+			// Prepare the response
+			std::ostringstream response;
+
+			// Initialize the SQLite database pointer and statement pointer
+			sqlite3 *db;
+			sqlite3_stmt *stmt;
+			const char *dbName = "trading.db"; // Ensure this is your database path
+
+			if (openDatabase(&db, dbName))
+			{
+				const char *schemaQuery = "SELECT name FROM sqlite_master WHERE type='table' AND name='Stocks';";
+
+				// Prepare the schema query to check if 'Stocks' table exists
+				int schemaRc = sqlite3_prepare_v2(db, schemaQuery, -1, &stmt, nullptr);
+				if (schemaRc != SQLITE_OK)
+				{
+					std::cerr << "Failed to prepare schema query: " << sqlite3_errmsg(db) << std::endl;
+					sqlite3_finalize(stmt);
+					sqlite3_close(db);
+					return 0; // Stop further execution if schema query fails
+				}
+
+				if (sqlite3_step(stmt) == SQLITE_ROW)
+				{
+					std::cout << "Stocks table exists." << std::endl;
+				}
+				else
+				{
+					std::cout << "Stocks table does not exist." << std::endl;
+					sqlite3_finalize(stmt);
+					sqlite3_close(db);
+					return 0; // Stop if the table does not exist
+				}
+				sqlite3_finalize(stmt); // Finalize the schema check statement
+
+				const char *query = "SELECT ID, stock_symbol, stock_name, stock_balance, user_id FROM Stocks;";
+
+				// Prepare the SELECT statement to get stocks
+				int rc = sqlite3_prepare_v2(db, query, -1, &stmt, nullptr);
+				if (rc != SQLITE_OK)
+				{
+					std::cerr << "Failed to prepare SELECT statement: " << sqlite3_errmsg(db) << std::endl;
+					sqlite3_finalize(stmt);
+					sqlite3_close(db);
+					std::string errorMsg = "400 Bad Request: Unable to list stocks\n";
+					send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+					return 0; // Stop further execution if query preparation fails
+				}
+
+				// Start building the response
+				response << "200 OK\nThe list of stocks:\n";
+
+				// Iterate over the query results
+				while (sqlite3_step(stmt) == SQLITE_ROW)
+				{
+					int stock_id = sqlite3_column_int(stmt, 0);
+					const char *stock_symbol = (const char *)sqlite3_column_text(stmt, 1);
+					const char *stock_name = (const char *)sqlite3_column_text(stmt, 2);
+					double stock_balance = sqlite3_column_double(stmt, 3);
+					int user_id = sqlite3_column_int(stmt, 4);
+
+					// Append the data to the response
+					response << stock_id << " " << stock_symbol << " " << stock_name << " " << stock_balance << " " << user_id << "\n";
+				}
+
+				sqlite3_finalize(stmt); // Finalize the SELECT statement
+				sqlite3_close(db);      // Close the database connection
+
+				// Send the response to the client
+				send(sock, response.str().c_str(), response.str().length(), 0);
+			}
+			else
+			{
+				std::string errorMsg = "400 Bad Request: Unable to open database\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+			}
+		}
+		else if (command == "BALANCE")
+		{
+			std::cout << "s: Received: BALANCE" << std::endl;
+
+			int user_id = 1; // Always show balance for user 1
+			std::string first_name, last_name;
+			double usd_balance;
+
+			if (getUserBalance(user_id, first_name, last_name, usd_balance, dbName))
+			{
+				std::ostringstream response;
+				response << "200 OK\n"
+							<< "Balance for user " << first_name << " " << last_name
+							<< ": $" << usd_balance << "\n";
+				std::string responseStr = response.str();
+
+				std::cout << "Sending response: " << responseStr; // Debug log
+				send(sock, responseStr.c_str(), responseStr.length(), 0);
+			}
+			else
+			{
+				std::string errorMsg = "404 Not Found\nUser with ID " + std::to_string(user_id) + " does not exist.\n";
+				std::cout << "Sending error response: " << errorMsg; // Debug log
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+			}
+		}
+
+		else if (command == "SHUTDOWN")
+		{
+			std::cout << "Received: SHUTDOWN" << std::endl;
+			shutdownRequested = true;
+			break;
+		}
+
+		else
+		{
+			// Invalid command
+			std::string errorMsg = "400 Bad Request: Invalid Command\n";
+			send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+		}	
     }
+	
+	// Close the client socket
 }
 
 int main()
@@ -52,6 +344,7 @@ int main()
     sin.sin_port = htons(SERVER_PORT);
 
     // Create the socket
+	int s = socket(AF_INET, SOCK_STREAM, 0);
     if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         perror("Socket creation failed");
@@ -97,7 +390,7 @@ int main()
 
 		// Create new thread to handle this client
 		pthread_t threadId;
-		if (pthread_create(&threadId, nullptr, handle_client, new_sock_ptr) != 0)
+		if (pthread_create(&threadId, nullptr, handle_single_thread, new_sock_ptr) != 0)
 		{
 			std::cerr << "Error creating thread for new client." << std::endl;
 			close(*new_sock_ptr);
