@@ -374,6 +374,24 @@ void* handle_single_thread(void* client_socket){
 			std::cout << "[INFO] Socket " << sock << " successfully logged in as user ID " << dbUserId << std::endl;
 		}
 
+		else if (command == "LOGOUT") {
+			// Check if the user is logged in
+			auto userIterator = socketToUserId.find(sock);
+			if(userIterator == socketToUserId.end())
+			{
+				std:: string errorMsg = "403 Forbidden: Not logged in.\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
+
+			else
+			{
+				socketToUserId.erase(sock);
+				std::string successMsg = "200 Ok: Logout successful\n";
+				send(sock, successMsg.c_str(), successMsg.length(), 0);
+			}
+		}
+
 		else if (command == "SHUTDOWN")
 		{
 			// Check if the user is logged in
