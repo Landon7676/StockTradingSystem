@@ -9,6 +9,10 @@
 #include <pthread.h>
 #include "database.h"
 #include <map>
+#include <sys/select.h>
+#include <sys/time.h>
+#include <fcntl.h>
+#include <cerrno>
 
 #define SERVER_PORT 5432
 #define MAX_PENDING 5
@@ -17,7 +21,6 @@
 static bool shutdownRequested = false;
 static const std::string dbName = "trading.db";
 static std::map<int,int> socketToUserId;
-static int listeningSock;
 
 /** 
 *Function used to handle a single client's connection and also moved the per-client while loop here,
@@ -390,20 +393,6 @@ void* handle_single_thread(void* client_socket){
 			{
 				std::cout << "Received: SHUTDOWN" << std::endl;
 				shutdownRequested = true;
-				
-				// Close the listening socket to signal we are done
-				close(listeningSock);
-
-				// Poke accept with a dummy self connection so main loop's accept unblocks
-				int pokeSock = socket(AF_INET, SOCK_STREAM, 0);
-				struct sockaddr_in pokeAddr;
-				memset(&pokeAddr, 0, sizeof(pokeAddr));
-				pokeAddr.sin_family = AF_INET;
-				pokeAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-				pokeAddr.sin_port = htons(SERVER_PORT);
-
-				connect(pokeSock, (struct sockaddr *)&pokeAddr, sizeof(pokeAddr));
-				close (pokeSock);
 				break;
 			}
 			else if(currUserID > 1)
@@ -472,38 +461,67 @@ int main()
     // Main server loop: accept new clients until SHUTDOWN is requested
 	while (!shutdownRequested){
 
-		// Create seperate socket for each client
-		struct sockaddr_in client_address;
-		socklen_t addr_len = sizeof(client_address);
+		fd_set readfds; // Declares a set of file descriptors we want to watch for read-readiness
+        FD_ZERO(&readfds); // Initializes the set to be empty
+        FD_SET(s, &readfds); // Adds our listening socket to this set
+        int maxFd = s;
 
-		int *new_sock_ptr = new int;
-		*new_sock_ptr = accept(s, (struct sockaddr *)&client_address, &addr_len);
+        struct timeval tv; // We set up a timeval struct to a 1-second timeout
+        tv.tv_sec = 1;
+        tv.tv_usec = 0;
 
-		if (*new_sock_ptr < 0)
+        int ready = select(maxFd + 1, &readfds, NULL, NULL, &tv); 
+
+        if (ready < 0)
         {
             if (shutdownRequested) break;
-            perror("Accept failed");
-            delete new_sock_ptr;
+            perror("select failed");
+            continue;
+        }
+        else if (ready == 0)
+        {
+            // Timeout; no new connections in this 1-second window
             continue;
         }
 
-		std::cout << "Client connected!" << std::endl;
+        // If we get here, the listening socket is readable
+        if (FD_ISSET(s, &readfds))
+        {
+            struct sockaddr_in client_address;
+            socklen_t addr_len = sizeof(client_address);
+            int *new_sock_ptr = new int;
+            *new_sock_ptr = accept(s, (struct sockaddr *)&client_address, &addr_len);
 
-		// Create new thread to handle this client
-		pthread_t threadId;
-		if (pthread_create(&threadId, nullptr, handle_single_thread, new_sock_ptr) != 0)
-		{
-			std::cerr << "Error creating thread for new client." << std::endl;
-			close(*new_sock_ptr);
-			delete new_sock_ptr;
-		}
-		else
-		{
-			// Detach the thread so its resources are reclaimed
-			pthread_detach(threadId);
-		}
+            if (*new_sock_ptr < 0)
+            {
+                if (shutdownRequested)
+                {
+                    delete new_sock_ptr;
+                    break;
+                }
+                if (errno != EAGAIN && errno != EWOULDBLOCK)
+                {
+                    perror("accept failed");
+                }
+                delete new_sock_ptr;
+                continue;
+            }
+
+			// If accept succeeded we have a valid connection socket in the pointer
+			// We create a new thread to handle the client
+            pthread_t threadId;
+            if (pthread_create(&threadId, nullptr, handle_single_thread, new_sock_ptr) != 0)
+            {
+                std::cerr << "Error creating thread for new client." << std::endl;
+                close(*new_sock_ptr);
+                delete new_sock_ptr;
+            }
+            else
+            {
+                pthread_detach(threadId);
+            }
+        }
 	}
     close(s);
-	close(listeningSock);
     return 0;
 }
