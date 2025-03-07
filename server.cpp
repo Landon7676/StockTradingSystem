@@ -59,6 +59,14 @@ void* handle_single_thread(void* client_socket){
 
 		if (command == "BUY")
 		{
+			// Check if the user is logged in
+			auto userIterator = socketToUserId.find(sock);
+			if(userIterator == socketToUserId.end())
+			{
+				std:: string errorMsg = "401 Forbidden: You must login first\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
 			// Extract required parameters
 			if (!(iss >> stock_symbol >> stock_amount >> price_per_stock >> user_id))
 			{
@@ -132,6 +140,14 @@ void* handle_single_thread(void* client_socket){
 		}
 		else if (command == "SELL")
 		{
+			// Check if the user is logged in
+			auto userIterator = socketToUserId.find(sock);
+			if(userIterator == socketToUserId.end())
+			{
+				std:: string errorMsg = "401 Forbidden: You must login first\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
 			// Extract required parameters
 			if (!(iss >> stock_symbol >> stock_amount >> price_per_stock >> user_id))
 			{
@@ -203,6 +219,14 @@ void* handle_single_thread(void* client_socket){
 		}
 		else if (command == "LIST")
 		{
+			// Check if the user is logged in
+			auto userIterator = socketToUserId.find(sock);
+			if(userIterator == socketToUserId.end())
+			{
+				std:: string errorMsg = "401 Forbidden: You must login first\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
 			// Log received command
 			std::cout << "s: Received: LIST" << std::endl;
 
@@ -285,6 +309,14 @@ void* handle_single_thread(void* client_socket){
 		}
 		else if (command == "BALANCE")
 		{
+			// Check if the user is logged in
+			auto userIterator = socketToUserId.find(sock);
+			if(userIterator == socketToUserId.end())
+			{
+				std:: string errorMsg = "401 Forbidden: You must login first\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
 			std::cout << "s: Received: BALANCE" << std::endl;
 
 			int user_id = 1; // Always show balance for user 1
