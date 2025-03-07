@@ -81,27 +81,75 @@ bool initializeDatabase(const std::string &dbName)
         }
         sqlite3_finalize(stmt);
 
+        
         if (user_count == 0)
         {
-            std::cout << "No users found. Creating default user..." << std::endl;
-            const char *insertDefaultUser = R"(
+            std::cout << "No users found. Creating default user database..." << std::endl;
+            const char *insertRootUser = R"(
                 INSERT INTO Users (first_name, last_name, user_name, password, usd_balance)
-                VALUES ('John', 'Doe', 'admin', 'password', 100.00);
+                VALUES ('John', 'Doe', 'root', 'root1', 100.00);
             )";
 
-            rc = sqlite3_exec(db, insertDefaultUser, nullptr, nullptr, &errMsg);
+            rc = sqlite3_exec(db, insertRootUser, nullptr, nullptr, &errMsg);
             if (rc != SQLITE_OK)
             {
-                std::cerr << "Error inserting default user: " << errMsg << std::endl;
+                std::cerr << "Error inserting user: " << errMsg << std::endl;
                 sqlite3_free(errMsg);
                 sqlite3_close(db);
                 return false;
             }
-            std::cout << "Default user created successfully. (Username: admin, Password: password, Balance: $100.00)" << std::endl;
+
+            const char *insertMaryUser = R"(
+                INSERT INTO Users (first_name, last_name, user_name, password, usd_balance)
+                VALUES ('Mary', 'Jane', 'mary', 'mary1', 100.00);
+            )";
+
+            rc = sqlite3_exec(db, insertMaryUser, nullptr, nullptr, &errMsg);
+            if (rc != SQLITE_OK)
+            {
+                std::cerr << "Error inserting user: " << errMsg << std::endl;
+                sqlite3_free(errMsg);
+                sqlite3_close(db);
+                return false;
+            }
+
+            const char *insertJohnUser = R"(
+                INSERT INTO Users (first_name, last_name, user_name, password, usd_balance)
+                VALUES ('John', 'Deere', 'john', 'john01', 100.00);
+            )";
+
+            rc = sqlite3_exec(db, insertJohnUser, nullptr, nullptr, &errMsg);
+            if (rc != SQLITE_OK)
+            {
+                std::cerr << "Error inserting user: " << errMsg << std::endl;
+                sqlite3_free(errMsg);
+                sqlite3_close(db);
+                return false;
+            }
+
+            const char *insertMoeUser = R"(
+                INSERT INTO Users (first_name, last_name, user_name, password, usd_balance)
+                VALUES ('Moe', 'Stizmak', 'moe', 'moe01', 100.00);
+            )";
+
+            rc = sqlite3_exec(db, insertMoeUser, nullptr, nullptr, &errMsg);
+            if (rc != SQLITE_OK)
+            {
+                std::cerr << "Error inserting user: " << errMsg << std::endl;
+                sqlite3_free(errMsg);
+                sqlite3_close(db);
+                return false;
+            }
+
+            std::cout << "Default user database created successfully." <<
+            "\n(Username: root, Password: root1, Balance: $100.00)" <<
+            "\n(Username: mary, Password: mary01, Balance: $100.00)" <<
+            "\n(Username: john, Password: john01, Balance: $100.00)" <<
+            "\n(Username: moe, Password: moe01, Balance: $100.00)" << std::endl;
         }
         else
         {
-            std::cout << "User(s) found in the database. No default user needed." << std::endl;
+            std::cout << "User(s) found in the database. No default user database needed." << std::endl;
         }
     }
     else

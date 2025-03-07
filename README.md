@@ -85,7 +85,7 @@ Replace `localhost` with the **server IP** if running on a separate machine.
 To remove compiled files, use:
 
 ```sh
-rm -f server client sqlite3.o
+rm -f server client sqlite3.o client.o database.o server.o trading.db
 ```
 
 ---

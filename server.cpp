@@ -309,6 +309,12 @@ void* handle_single_thread(void* client_socket){
 
 		else if (command == "SHUTDOWN")
 		{
+			// Check if the user is logged in and has root privileges
+			if(user_id != 0){
+				std:: string errorMsg = "403 Forbidden: Only the root user is allowed to shutdown the server\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
 			std::cout << "Received: SHUTDOWN" << std::endl;
 			shutdownRequested = true;
 			break;

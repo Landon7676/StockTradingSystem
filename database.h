@@ -21,7 +21,8 @@ bool sellStock(const std::string &stock_symbol,
                double price_per_stock,
                int user_id,
                const std::string &dbName);
-bool listStock(const std::string &dbName);
+
+bool listStock(const std::string &dbName, int user_id);
 
 bool getUserBalance(int user_id, 
                     std::string &first_name,
