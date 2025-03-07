@@ -10,7 +10,7 @@
 #include "database.h"
 #include <map>
 
-#define SERVER_PORT 5431
+#define SERVER_PORT 5432
 #define MAX_PENDING 5
 #define MAX_LINE 256
 
@@ -358,6 +358,20 @@ void* handle_single_thread(void* client_socket){
 			{
 				std::cout << "Received: SHUTDOWN" << std::endl;
 				shutdownRequested = true;
+				
+				// Close the listening socket to signal we are done
+				close(listeningSock);
+
+				// Poke accept with a dummy self connection so main loop's accept unblocks
+				int pokeSock = socket(AF_INET, SOCK_STREAM, 0);
+				struct sockaddr_in pokeAddr;
+				memset(&pokeAddr, 0, sizeof(pokeAddr));
+				pokeAddr.sin_family = AF_INET;
+				pokeAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+				pokeAddr.sin_port = htons(SERVER_PORT);
+
+				connect(pokeSock, (struct sockaddr *)&pokeAddr, sizeof(pokeAddr));
+				close (pokeSock);
 				break;
 			}
 			else if(currUserID > 1)
@@ -366,11 +380,6 @@ void* handle_single_thread(void* client_socket){
 				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
 				continue;
 			}
-		}
-
-		else if(command.empty())
-		{
-			continue;
 		}
 
 		else
@@ -382,6 +391,8 @@ void* handle_single_thread(void* client_socket){
     }
 	
 	// Close the client socket
+	close(sock);
+	return nullptr;
 }
 
 int main()
@@ -438,14 +449,13 @@ int main()
 
 		if (*new_sock_ptr < 0)
         {
-            // If SHUTDOWN is triggered while in accept, we often get an error
             if (shutdownRequested) break;
             perror("Accept failed");
             delete new_sock_ptr;
             continue;
         }
 
-		std ::cout << "Client connected!" << std::endl;
+		std::cout << "Client connected!" << std::endl;
 
 		// Create new thread to handle this client
 		pthread_t threadId;
@@ -462,5 +472,6 @@ int main()
 		}
 	}
     close(s);
+	close(listeningSock);
     return 0;
 }
