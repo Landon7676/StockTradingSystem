@@ -110,13 +110,12 @@ rm -f server client sqlite3.o client.o database.o server.o trading.db
 
 - Header file behaves as if it is not included but still functions when explicitly included.
 - Needed to specify version of C++ to compile server
-- SHUTDOWN is broken
 
 ---
 
 ## **To Do**
 
-- Change how the user id is recieved for each command
+- LOGOUT, WHO, DEPOSIT, LOOKUP
 
 ---
 
