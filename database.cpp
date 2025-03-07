@@ -101,7 +101,7 @@ bool initializeDatabase(const std::string &dbName)
 
             const char *insertMaryUser = R"(
                 INSERT INTO Users (first_name, last_name, user_name, password, usd_balance)
-                VALUES ('Mary', 'Jane', 'mary', 'mary1', 100.00);
+                VALUES ('Mary', 'Jane', 'mary', 'mary01', 100.00);
             )";
 
             rc = sqlite3_exec(db, insertMaryUser, nullptr, nullptr, &errMsg);
@@ -594,5 +594,41 @@ bool getUserBalance(int user_id, std::string &first_name, std::string &last_name
     sqlite3_close(db);
     return found;
 }
+
+bool checkCredentials(const std::string &userName, const std::string &password, int &user_id_out, const std::string &dbName)
+{
+    sqlite3 *db;
+    sqlite3_stmt *stmt;
+
+    // Open the DB
+    if (!openDatabase(&db, dbName)) {
+        return false;
+    }
+
+    // Prepare SQL to find user by username + password
+    const char *sql = "SELECT ID FROM Users WHERE user_name = ? AND password = ?;";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Failed to prepare login statement: " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_close(db);
+        return false;
+    }
+
+    // Bind the username and password
+    sqlite3_bind_text(stmt, 1, userName.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, password.c_str(), -1, SQLITE_STATIC);
+
+    bool valid = false;
+    // If row exists -> credentials match
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        user_id_out = sqlite3_column_int(stmt, 0);
+        valid = true;
+    }
+
+    // Clean up
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return valid;
+}
+
 
 #endif

@@ -8,13 +8,16 @@
 #include <sqlite3.h>
 #include <pthread.h>
 #include "database.h"
+#include <map>
 
-#define SERVER_PORT 5432
+#define SERVER_PORT 5431
 #define MAX_PENDING 5
 #define MAX_LINE 256
 
 static bool shutdownRequested = false;
 static const std::string dbName = "trading.db";
+static std::map<int,int> socketToUserId;
+static int listeningSock;
 
 /** 
 *Function used to handle a single client's connection and also moved the per-client while loop here,
@@ -307,17 +310,67 @@ void* handle_single_thread(void* client_socket){
 			}
 		}
 
+		else if (command == "LOGIN") {
+			// Parse out the username and password from input
+			std::string userName, password;
+			
+			if(!(iss >> userName >> password))
+			{
+				// Client did not provide enough arguments
+				std::string errMsg = "400 Bad Request: Invalid login format. Usage: LOGIN <username> <password>\n";
+				send(sock, errMsg.c_str(), errMsg.length(), 0);
+				continue;
+			}
+
+			// Now check credentials
+			int dbUserId = -1; // Will be set within method
+			if(!checkCredentials(userName, password, dbUserId, dbName))
+			{
+				std::string errMsg = "403 Wrong Username or Password\n";
+				send(sock, errMsg.c_str(), errMsg.length(), 0);
+				continue;
+			}
+
+			socketToUserId[sock] = dbUserId;
+
+			std::string successMsg = "200 Ok: Login successful\n";
+			send(sock, successMsg.c_str(), successMsg.length(), 0);
+
+			std::cout << "[INFO] Socket " << sock << " successfully logged in as user ID " << dbUserId << std::endl;
+		}
+
 		else if (command == "SHUTDOWN")
 		{
-			// Check if the user is logged in and has root privileges
-			if(user_id != 0){
+			// Check if the user is logged in
+			auto userIterator = socketToUserId.find(sock);
+			if(userIterator == socketToUserId.end())
+			{
+				std:: string errorMsg = "403 Forbidden: Not logged in. Only the root user is allowed to shutdown the server\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
+
+			// Get current userID from the map
+			int currUserID = userIterator->second;
+
+			// Check if that userID is the root user
+			if(currUserID == 1)
+			{
+				std::cout << "Received: SHUTDOWN" << std::endl;
+				shutdownRequested = true;
+				break;
+			}
+			else if(currUserID > 1)
+			{
 				std:: string errorMsg = "403 Forbidden: Only the root user is allowed to shutdown the server\n";
 				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
 				continue;
 			}
-			std::cout << "Received: SHUTDOWN" << std::endl;
-			shutdownRequested = true;
-			break;
+		}
+
+		else if(command.empty())
+		{
+			continue;
 		}
 
 		else

@@ -6,7 +6,7 @@
 #include <netdb.h>
 using namespace std;
 
-#define SERVER_PORT 5432
+#define SERVER_PORT 5431
 #define MAX_LINE 256
 
 int main(int argc, char *argv[])
@@ -82,9 +82,22 @@ int main(int argc, char *argv[])
                 perror("Send failed");
                 break;
             }
-            cout << "200 OK" << endl;
-            break;
+            // Now wait for server response
+            len = recv(s, buf, sizeof(buf), 0);
+            if (len <= 0)
+            {
+                cout << "Server disconnected.\n";
+                break;
+            }
+            buf[len] = '\0';
+            cout << "Server Response: " << buf << endl;
+
+            // Decide if it was an actual shutdown
+            if (strstr(buf, "200 OK")) {
+                break;  // Only if the server confirmed shutdown do we exit
+            }
         }
+
 
         // Send the command to the server
         len = strlen(buf) + 1;

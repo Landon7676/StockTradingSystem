@@ -22,7 +22,8 @@ bool sellStock(const std::string &stock_symbol,
                int user_id,
                const std::string &dbName);
 
-bool listStock(const std::string &dbName, int user_id);
+bool listStock(const std::string &dbName,
+                 int user_id);
 
 bool getUserBalance(int user_id, 
                     std::string &first_name,
@@ -30,4 +31,6 @@ bool getUserBalance(int user_id,
                     double &usd_balance,
                     const std::string &dbName);
 
+bool checkCredentials(const std::string &userName, const std::string &password, int &user_id_out, const std::string &dbName);
+                    
 #endif
