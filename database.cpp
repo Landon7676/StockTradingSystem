@@ -167,179 +167,146 @@ bool initializeDatabase(const std::string &dbName)
 }
 
 bool buyStock(const std::string &stock_symbol,
-              const std::string &stock_name,
-              double amount,
-              double price_per_stock,
-              int user_id,
-              const std::string &dbName)
+    const std::string &stock_name,
+    double amount,
+    double price_per_stock,
+    int user_id,
+    const std::string &dbName)
 {
-    sqlite3 *db;
-    int rc;
-    sqlite3_stmt *stmt;
+sqlite3 *db;
+int rc;
+sqlite3_stmt *stmt;
 
-    if (!openDatabase(&db, dbName))
-    {
-        return false;
-    }
-    // Query to check if the user exists
-    const char *userExists = "SELECT COUNT(*) FROM Users WHERE ID = ?;";
+if (!openDatabase(&db, dbName))
+{
+return false;
+}
 
-    // Prepare the SQL statement
-    rc = sqlite3_prepare_v2(db, userExists, -1, &stmt, nullptr);
-    if (rc != SQLITE_OK)
-    {
-        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
-        sqlite3_close(db);
-        return false;
-    }
+double total_cost = amount * price_per_stock;
 
-    // Bind user_id to the query
-    sqlite3_bind_int(stmt, 1, user_id);
+// Step 1: Check user's balance BEFORE making any changes
+const char *userBalanceSQL = "SELECT usd_balance FROM Users WHERE ID = ?;";
+rc = sqlite3_prepare_v2(db, userBalanceSQL, -1, &stmt, nullptr);
+if (rc != SQLITE_OK)
+{
+std::cerr << "Failed to prepare balance check statement: " << sqlite3_errmsg(db) << std::endl;
+sqlite3_close(db);
+return false;
+}
 
-    // Execute statement and check if user exists
-    bool userExistsFlag = false;
-    if (sqlite3_step(stmt) == SQLITE_ROW)
-    {
-        userExistsFlag = sqlite3_column_int(stmt, 0) > 0; // Get the COUNT(*) value
-    }
+sqlite3_bind_int(stmt, 1, user_id);
 
-    // Finalize statement
-    sqlite3_finalize(stmt);
+double usd_balance = 0.0;
+if (sqlite3_step(stmt) == SQLITE_ROW)
+{
+usd_balance = sqlite3_column_double(stmt, 0);
+}
 
-    if (!userExistsFlag)
-    {
-        std::cerr << "User ID " << user_id << " does not exist!" << std::endl;
-        sqlite3_close(db);
-        return false;
-    }
+sqlite3_finalize(stmt);
 
-    // Query to check for stock
-    const char *stockExists = "SELECT COUNT(*) FROM Stocks WHERE stock_symbol = ? AND user_id = ?;";
+if (usd_balance < total_cost)
+{
+std::cerr << "Insufficient funds! Balance: $" << usd_balance << ", Required: $" << total_cost << std::endl;
+sqlite3_close(db);
+return false; // Stop the function if not enough funds
+}
 
-    // Prepare statement
-    rc = sqlite3_prepare_v2(db, stockExists, -1, &stmt, nullptr);
-    if (rc != SQLITE_OK)
-    {
-        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
-        sqlite3_close(db);
-        return false;
-    }
+// Step 2: Check if the stock already exists for the user
+const char *stockExistsSQL = "SELECT stock_balance FROM Stocks WHERE stock_symbol = ? AND user_id = ?;";
+rc = sqlite3_prepare_v2(db, stockExistsSQL, -1, &stmt, nullptr);
+if (rc != SQLITE_OK)
+{
+std::cerr << "Failed to prepare stock existence check: " << sqlite3_errmsg(db) << std::endl;
+sqlite3_close(db);
+return false;
+}
 
-    // Bind two values to query
-    sqlite3_bind_text(stmt, 1, stock_symbol.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_int(stmt, 2, user_id);
+sqlite3_bind_text(stmt, 1, stock_symbol.c_str(), -1, SQLITE_STATIC);
+sqlite3_bind_int(stmt, 2, user_id);
 
-    // Execute the query
-    rc = sqlite3_step(stmt);
+bool stockExists = false;
+double existingStockBalance = 0.0;
 
-    // Check if stock exists
-    bool stockExistsFlag = false;
-    int stockCount = 0;
+if (sqlite3_step(stmt) == SQLITE_ROW)
+{
+stockExists = true;
+existingStockBalance = sqlite3_column_double(stmt, 0);
+}
 
-    if (sqlite3_step(stmt) == SQLITE_ROW)
-    {
-        stockCount = sqlite3_column_int(stmt, 0);
-    }
+sqlite3_finalize(stmt);
 
-    stockExistsFlag = stockCount > 0;
+// Step 3: Deduct the balance
+const char *deductBalanceSQL = "UPDATE Users SET usd_balance = usd_balance - ? WHERE ID = ?;";
+rc = sqlite3_prepare_v2(db, deductBalanceSQL, -1, &stmt, nullptr);
+if (rc != SQLITE_OK)
+{
+std::cerr << "Failed to prepare balance deduction statement: " << sqlite3_errmsg(db) << std::endl;
+sqlite3_close(db);
+return false;
+}
 
-    sqlite3_finalize(stmt);
+sqlite3_bind_double(stmt, 1, total_cost);
+sqlite3_bind_int(stmt, 2, user_id);
 
-    // If the stock does not exist then we insert a new one
-    if (stockExistsFlag == false)
-    {
-        // Query to insert new stock
-        const char *stockInsert = R"(
-            INSERT INTO Stocks (stock_symbol, stock_name, stock_balance, user_id)
-            VALUES (?, ?, ?, ?);
-        )";
+if (sqlite3_step(stmt) != SQLITE_DONE)
+{
+std::cerr << "Error deducting user balance: " << sqlite3_errmsg(db) << std::endl;
+sqlite3_finalize(stmt);
+sqlite3_close(db);
+return false;
+}
 
-        // Prepare statement
-        rc = sqlite3_prepare_v2(db, stockInsert, -1, &stmt, nullptr);
-        if (rc != SQLITE_OK)
-        {
-            std::cerr << "Failed to prepare INSERT statement: " << sqlite3_errmsg(db) << std::endl;
-            sqlite3_close(db);
-            return false;
-        }
+sqlite3_finalize(stmt);
 
-        sqlite3_bind_text(stmt, 1, stock_symbol.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 2, stock_name.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_double(stmt, 3, amount);
-        sqlite3_bind_int(stmt, 4, user_id);
+// Step 4: Insert or update stock record
+if (stockExists)
+{
+const char *updateStockSQL = "UPDATE Stocks SET stock_balance = stock_balance + ? WHERE stock_symbol = ? AND user_id = ?;";
+rc = sqlite3_prepare_v2(db, updateStockSQL, -1, &stmt, nullptr);
+if (rc != SQLITE_OK)
+{
+  std::cerr << "Failed to prepare stock update statement: " << sqlite3_errmsg(db) << std::endl;
+  sqlite3_close(db);
+  return false;
+}
 
-        // Execute the INSERT statement
-        rc = sqlite3_step(stmt);
-        if (rc != SQLITE_DONE)
-        {
-            std::cerr << "Error inserting new stock: " << sqlite3_errmsg(db) << std::endl;
-        }
-        else
-        {
-            std::cout << "New stock record inserted successfully!" << std::endl;
-        }
+sqlite3_bind_double(stmt, 1, amount);
+sqlite3_bind_text(stmt, 2, stock_symbol.c_str(), -1, SQLITE_STATIC);
+sqlite3_bind_int(stmt, 3, user_id);
 
-        sqlite3_finalize(stmt);
-    }
+if (sqlite3_step(stmt) != SQLITE_DONE)
+{
+  std::cerr << "Error updating stock balance: " << sqlite3_errmsg(db) << std::endl;
+}
 
-    double total_cost = amount * price_per_stock;
+sqlite3_finalize(stmt);
+}
+else
+{
+const char *insertStockSQL = "INSERT INTO Stocks (stock_symbol, stock_name, stock_balance, user_id) VALUES (?, ?, ?, ?);";
+rc = sqlite3_prepare_v2(db, insertStockSQL, -1, &stmt, nullptr);
+if (rc != SQLITE_OK)
+{
+  std::cerr << "Failed to prepare stock insert statement: " << sqlite3_errmsg(db) << std::endl;
+  sqlite3_close(db);
+  return false;
+}
 
-    // Query to check user balance
-    const char *userBalance = "SELECT usd_balance FROM Users WHERE ID = ?;";
+sqlite3_bind_text(stmt, 1, stock_symbol.c_str(), -1, SQLITE_STATIC);
+sqlite3_bind_text(stmt, 2, stock_name.c_str(), -1, SQLITE_STATIC);
+sqlite3_bind_double(stmt, 3, amount);
+sqlite3_bind_int(stmt, 4, user_id);
 
-    rc = sqlite3_prepare_v2(db, userBalance, -1, &stmt, nullptr);
-    if (rc != SQLITE_OK)
-    {
-        std::cerr << "Failed to prepare balance check statement: " << sqlite3_errmsg(db) << std::endl;
-        sqlite3_close(db);
-        return false;
-    }
+if (sqlite3_step(stmt) != SQLITE_DONE)
+{
+  std::cerr << "Error inserting new stock: " << sqlite3_errmsg(db) << std::endl;
+}
 
-    // Bind user ID
-    sqlite3_bind_int(stmt, 1, user_id);
+sqlite3_finalize(stmt);
+}
 
-    // Execute query
-    double usd_balance = 0.0;
-    if (sqlite3_step(stmt) == SQLITE_ROW)
-    {
-        usd_balance = sqlite3_column_double(stmt, 0);
-    }
-
-    sqlite3_finalize(stmt);
-    if (usd_balance < total_cost)
-    {
-        std::cerr << "User does not have enough funds! Balance: $ " << usd_balance << ", Required: " << total_cost << std::endl;
-        sqlite3_close(db);
-        return false;
-    }
-
-    const char *deductBalanceSQL = "UPDATE Users SET usd_balance = usd_balance - ? WHERE ID = ?;";
-
-    rc = sqlite3_prepare_v2(db, deductBalanceSQL, -1, &stmt, nullptr);
-    if (rc != SQLITE_OK)
-    {
-        std::cerr << "Failed to prepare balance deduction statement: " << sqlite3_errmsg(db) << std::endl;
-        sqlite3_close(db);
-        return false;
-    }
-
-    // Bind total cost and user ID
-    sqlite3_bind_double(stmt, 1, total_cost);
-    sqlite3_bind_int(stmt, 2, user_id);
-
-    // Execute update
-    rc = sqlite3_step(stmt);
-    if (rc != SQLITE_DONE)
-    {
-        std::cerr << "Error updating user balance: " << sqlite3_errmsg(db) << std::endl;
-        sqlite3_finalize(stmt);
-        sqlite3_close(db);
-        return false;
-    }
-
-    sqlite3_finalize(stmt);
-    sqlite3_close(db);
-    return true;
+sqlite3_close(db);
+return true;
 }
 
 bool sellStock(const std::string &stock_symbol,
