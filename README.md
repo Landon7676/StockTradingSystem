@@ -100,10 +100,15 @@ rm -f server client sqlite3.o client.o database.o server.o trading.db
 
 ### **Landon Johnson**
 
+ # **Project 1**
 - Developed initial **client.cpp** and **server.cpp** files.
 - Implemented **LIST** and **BALANCE** commands.
 - Integrated these commands into the **client** and **server**.
 
+# **Project 2**
+- Implemted **WHO**, **DEPOSIT**, and **LOOKUP** commands.
+- Updated **buyStock function** .
+- Integrated these commands into both the  **client** and **server**.
 ---
 
 ## **Bugs**
