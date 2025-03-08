@@ -20,25 +20,26 @@
 
 static bool shutdownRequested = false;
 static const std::string dbName = "trading.db";
-static std::map<int,int> socketToUserId;
+static std::map<int, int> socketToUserId;
 
-/** 
-*Function used to handle a single client's connection and also moved the per-client while loop here,
-*so each client is handled in parallel by its own thread
-**/
-void* handle_single_thread(void* client_socket){
-    // Convert the generic pointer to an int pointer, then copy and free it
-    int sock = *(int*)client_socket;
-    free(client_socket);
+/**
+ *Function used to handle a single client's connection and also moved the per-client while loop here,
+ *so each client is handled in parallel by its own thread
+ **/
+void *handle_single_thread(void *client_socket)
+{
+	// Convert the generic pointer to an int pointer, then copy and free it
+	int sock = *(int *)client_socket;
+	free(client_socket);
 
-    char buf[MAX_LINE];
+	char buf[MAX_LINE];
 
 	// Debug output to check if client is truly multithreaded
 	std::cout << "[DEBUG] Thread ID: " << pthread_self() << " handling client on socket " << sock << std::endl;
 
 	// Process messages from this client until they disconnect or issue SHUTDOWN
-    while (!shutdownRequested)
-    {
+	while (!shutdownRequested)
+	{
 		memset(buf, 0, sizeof(buf)); // Clear the buffer
 		int buf_len = recv(sock, buf, sizeof(buf), 0);
 		if (buf_len <= 0)
@@ -64,9 +65,9 @@ void* handle_single_thread(void* client_socket){
 		{
 			// Check if the user is logged in
 			auto userIterator = socketToUserId.find(sock);
-			if(userIterator == socketToUserId.end())
+			if (userIterator == socketToUserId.end())
 			{
-				std:: string errorMsg = "401 Forbidden: You must login first\n";
+				std::string errorMsg = "401 Forbidden: You must login first\n";
 				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
 				continue;
 			}
@@ -91,7 +92,7 @@ void* handle_single_thread(void* client_socket){
 
 			// Log received command
 			std::cout << "s: Received: BUY " << stock_symbol << " " << stock_amount
-						<< " " << price_per_stock << " " << user_id << std::endl;
+					  << " " << price_per_stock << " " << user_id << std::endl;
 
 			// Attempt to process the stock purchase
 			if (buyStock(stock_symbol, stock_symbol, stock_amount, price_per_stock, user_id, dbName))
@@ -132,7 +133,7 @@ void* handle_single_thread(void* client_socket){
 
 				std::ostringstream response;
 				response << "200 OK\nBOUGHT: New balance: " << new_stock_balance
-							<< " " << stock_symbol << ". USD balance $" << new_usd_balance << "\n";
+						 << " " << stock_symbol << ". USD balance $" << new_usd_balance << "\n";
 				send(sock, response.str().c_str(), response.str().length(), 0);
 			}
 			else
@@ -145,9 +146,9 @@ void* handle_single_thread(void* client_socket){
 		{
 			// Check if the user is logged in
 			auto userIterator = socketToUserId.find(sock);
-			if(userIterator == socketToUserId.end())
+			if (userIterator == socketToUserId.end())
 			{
-				std:: string errorMsg = "401 Forbidden: You must login first\n";
+				std::string errorMsg = "401 Forbidden: You must login first\n";
 				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
 				continue;
 			}
@@ -171,7 +172,7 @@ void* handle_single_thread(void* client_socket){
 
 			// Log received command
 			std::cout << "s: Received: SELL " << stock_symbol << " " << stock_amount
-						<< " " << price_per_stock << " " << user_id << std::endl;
+					  << " " << price_per_stock << " " << user_id << std::endl;
 
 			// Attempt to process the stock sale
 			if (sellStock(stock_symbol, stock_amount, price_per_stock, user_id, dbName))
@@ -211,7 +212,7 @@ void* handle_single_thread(void* client_socket){
 
 				std::ostringstream response;
 				response << "200 OK\nSOLD: New balance: " << new_stock_balance
-							<< " " << stock_symbol << ". USD $" << new_usd_balance << "\n";
+						 << " " << stock_symbol << ". USD $" << new_usd_balance << "\n";
 				send(sock, response.str().c_str(), response.str().length(), 0);
 			}
 			else
@@ -220,13 +221,94 @@ void* handle_single_thread(void* client_socket){
 				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
 			}
 		}
+		else if (command == "DEPOSIT")
+		{
+			auto userIterator = socketToUserId.find(sock);
+			if (userIterator == socketToUserId.end())
+			{
+				std::string errorMsg = "401 Forbidden: You must login first\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
+
+			double amount;
+			if (!(iss >> amount) || amount <= 0)
+			{
+				std::string errorMsg = "400 Bad Request: Invalid deposit amount\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
+
+			int user_id = userIterator->second;
+			if (depositAmount(user_id, amount, dbName))
+			{
+				std::ostringstream response;
+				response << "200 OK\nDeposit successful. New balance $" << getUserBalance(user_id, dbName) << "\n";
+				send(sock, response.str().c_str(), response.str().length(), 0);
+			}
+			else
+			{
+				std::string errorMsg = "400 Bad Request: Deposit failed\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+			}
+		}
+		else if (command == "WHO")
+		{
+			auto userIterator = socketToUserId.find(sock);
+			if (userIterator == socketToUserId.end() || userIterator->second != 1) // Ensure only root can run this
+			{
+				std::string errorMsg = "403 Forbidden: Only the root user can execute this command\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
+
+			std::ostringstream response;
+			response << "200 OK\nActive users:\n"
+					 << getActiveUsers();
+			send(sock, response.str().c_str(), response.str().length(), 0);
+		}
+		else if (command == "LOOKUP")
+		{
+			auto userIterator = socketToUserId.find(sock);
+			if (userIterator == socketToUserId.end())
+			{
+				std::string errorMsg = "401 Forbidden: You must login first\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
+
+			std::string ticker;
+			if (!(iss >> ticker))
+			{
+				std::string errorMsg = "400 Bad Request: Missing stock ticker\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+				continue;
+			}
+
+			int user_id = userIterator->second;
+			std::string stockInfo = lookupStock(user_id, ticker, dbName);
+
+			if (!stockInfo.empty())
+			{
+				std::ostringstream response;
+				response << "200 OK\nFound match:\n"
+						 << stockInfo;
+				send(sock, response.str().c_str(), response.str().length(), 0);
+			}
+			else
+			{
+				std::string errorMsg = "404 Your search did not match any records.\n";
+				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
+			}
+		}
+
 		else if (command == "LIST")
 		{
 			// Check if the user is logged in
 			auto userIterator = socketToUserId.find(sock);
-			if(userIterator == socketToUserId.end())
+			if (userIterator == socketToUserId.end())
 			{
-				std:: string errorMsg = "401 Forbidden: You must login first\n";
+				std::string errorMsg = "401 Forbidden: You must login first\n";
 				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
 				continue;
 			}
@@ -299,7 +381,7 @@ void* handle_single_thread(void* client_socket){
 				}
 
 				sqlite3_finalize(stmt); // Finalize the SELECT statement
-				sqlite3_close(db);      // Close the database connection
+				sqlite3_close(db);		// Close the database connection
 
 				// Send the response to the client
 				send(sock, response.str().c_str(), response.str().length(), 0);
@@ -314,9 +396,9 @@ void* handle_single_thread(void* client_socket){
 		{
 			// Check if the user is logged in
 			auto userIterator = socketToUserId.find(sock);
-			if(userIterator == socketToUserId.end())
+			if (userIterator == socketToUserId.end())
 			{
-				std:: string errorMsg = "401 Forbidden: You must login first\n";
+				std::string errorMsg = "401 Forbidden: You must login first\n";
 				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
 				continue;
 			}
@@ -330,8 +412,8 @@ void* handle_single_thread(void* client_socket){
 			{
 				std::ostringstream response;
 				response << "200 OK\n"
-							<< "Balance for user " << first_name << " " << last_name
-							<< ": $" << usd_balance << "\n";
+						 << "Balance for user " << first_name << " " << last_name
+						 << ": $" << usd_balance << "\n";
 				std::string responseStr = response.str();
 
 				std::cout << "Sending response: " << responseStr; // Debug log
@@ -345,11 +427,12 @@ void* handle_single_thread(void* client_socket){
 			}
 		}
 
-		else if (command == "LOGIN") {
+		else if (command == "LOGIN")
+		{
 			// Parse out the username and password from input
 			std::string userName, password;
-			
-			if(!(iss >> userName >> password))
+
+			if (!(iss >> userName >> password))
 			{
 				// Client did not provide enough arguments
 				std::string errMsg = "400 Bad Request: Invalid login format. Usage: LOGIN <username> <password>\n";
@@ -359,7 +442,7 @@ void* handle_single_thread(void* client_socket){
 
 			// Now check credentials
 			int dbUserId = -1; // Will be set within method
-			if(!checkCredentials(userName, password, dbUserId, dbName))
+			if (!checkCredentials(userName, password, dbUserId, dbName))
 			{
 				std::string errMsg = "403 Wrong Username or Password\n";
 				send(sock, errMsg.c_str(), errMsg.length(), 0);
@@ -374,12 +457,13 @@ void* handle_single_thread(void* client_socket){
 			std::cout << "[INFO] Socket " << sock << " successfully logged in as user ID " << dbUserId << std::endl;
 		}
 
-		else if (command == "LOGOUT") {
+		else if (command == "LOGOUT")
+		{
 			// Check if the user is logged in
 			auto userIterator = socketToUserId.find(sock);
-			if(userIterator == socketToUserId.end())
+			if (userIterator == socketToUserId.end())
 			{
-				std:: string errorMsg = "403 Forbidden: Not logged in.\n";
+				std::string errorMsg = "403 Forbidden: Not logged in.\n";
 				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
 				continue;
 			}
@@ -396,9 +480,9 @@ void* handle_single_thread(void* client_socket){
 		{
 			// Check if the user is logged in
 			auto userIterator = socketToUserId.find(sock);
-			if(userIterator == socketToUserId.end())
+			if (userIterator == socketToUserId.end())
 			{
-				std:: string errorMsg = "403 Forbidden: Not logged in. Only the root user is allowed to shutdown the server\n";
+				std::string errorMsg = "403 Forbidden: Not logged in. Only the root user is allowed to shutdown the server\n";
 				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
 				continue;
 			}
@@ -407,15 +491,15 @@ void* handle_single_thread(void* client_socket){
 			int currUserID = userIterator->second;
 
 			// Check if that userID is the root user
-			if(currUserID == 1)
+			if (currUserID == 1)
 			{
 				std::cout << "Received: SHUTDOWN" << std::endl;
 				shutdownRequested = true;
 				break;
 			}
-			else if(currUserID > 1)
+			else if (currUserID > 1)
 			{
-				std:: string errorMsg = "403 Forbidden: Only the root user is allowed to shutdown the server\n";
+				std::string errorMsg = "403 Forbidden: Only the root user is allowed to shutdown the server\n";
 				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
 				continue;
 			}
@@ -426,120 +510,131 @@ void* handle_single_thread(void* client_socket){
 			// Invalid command
 			std::string errorMsg = "400 Bad Request: Invalid Command\n";
 			send(sock, errorMsg.c_str(), errorMsg.length(), 0);
-		}	
-    }
-	
+		}
+	}
+
 	// Close the client socket
 	close(sock);
 	return nullptr;
 }
+std::string getActiveUsers()
+{
+    std::ostringstream users;
+    for (const auto &entry : socketToUserId)
+    {
+        users << "UserID: " << entry.second << " (Socket: " << entry.first << ")\n";
+    }
+    return users.str();
+}
 
 int main()
 {
-    struct sockaddr_in sin;
-    // Initialize the database when the server starts
-    if (!initializeDatabase(dbName))
-    {
-        std::cerr << "Failed to initialize database!" << std::endl;
-        return 1; // Exit if the database setup fails
-    }
+	struct sockaddr_in sin;
+	// Initialize the database when the server starts
+	if (!initializeDatabase(dbName))
+	{
+		std::cerr << "Failed to initialize database!" << std::endl;
+		return 1; // Exit if the database setup fails
+	}
 
-    std::cout << "Database initialized. Server is ready to accept connections.\n";
+	std::cout << "Database initialized. Server is ready to accept connections.\n";
 
-    // Build address data structure
-    memset(&sin, 0, sizeof(sin));
-    sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = INADDR_ANY;
-    sin.sin_port = htons(SERVER_PORT);
+	// Build address data structure
+	memset(&sin, 0, sizeof(sin));
+	sin.sin_family = AF_INET;
+	sin.sin_addr.s_addr = INADDR_ANY;
+	sin.sin_port = htons(SERVER_PORT);
 
-    // Create the socket
+	// Create the socket
 	int s = socket(AF_INET, SOCK_STREAM, 0);
-    if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-    {
-        perror("Socket creation failed");
-        exit(1);
-    }
+	if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+	{
+		perror("Socket creation failed");
+		exit(1);
+	}
 
 	// Bind the socket
-    if (bind(s, (struct sockaddr *)&sin, sizeof(sin)) < 0)
-    {
-        perror("Bind failed");
-        exit(1);
-    }
+	if (bind(s, (struct sockaddr *)&sin, sizeof(sin)) < 0)
+	{
+		perror("Bind failed");
+		exit(1);
+	}
 
 	// Listen for incoming connections
-    if (listen(s, MAX_PENDING) < 0)
-    {
-        perror("Listen failed");
-        exit(1);
-    }
+	if (listen(s, MAX_PENDING) < 0)
+	{
+		perror("Listen failed");
+		exit(1);
+	}
 
-    std::cout << "Server listening on port " << SERVER_PORT << "..." << std::endl;
+	std::cout << "Server listening on port " << SERVER_PORT << "..." << std::endl;
 
-    // Main server loop: accept new clients until SHUTDOWN is requested
-	while (!shutdownRequested){
+	// Main server loop: accept new clients until SHUTDOWN is requested
+	while (!shutdownRequested)
+	{
 
-		fd_set readfds; // Declares a set of file descriptors we want to watch for read-readiness
-        FD_ZERO(&readfds); // Initializes the set to be empty
-        FD_SET(s, &readfds); // Adds our listening socket to this set
-        int maxFd = s;
+		fd_set readfds;		 // Declares a set of file descriptors we want to watch for read-readiness
+		FD_ZERO(&readfds);	 // Initializes the set to be empty
+		FD_SET(s, &readfds); // Adds our listening socket to this set
+		int maxFd = s;
 
-        struct timeval tv; // We set up a timeval struct to a 1-second timeout
-        tv.tv_sec = 1;
-        tv.tv_usec = 0;
+		struct timeval tv; // We set up a timeval struct to a 1-second timeout
+		tv.tv_sec = 1;
+		tv.tv_usec = 0;
 
-        int ready = select(maxFd + 1, &readfds, NULL, NULL, &tv); 
+		int ready = select(maxFd + 1, &readfds, NULL, NULL, &tv);
 
-        if (ready < 0)
-        {
-            if (shutdownRequested) break;
-            perror("select failed");
-            continue;
-        }
-        else if (ready == 0)
-        {
-            // Timeout; no new connections in this 1-second window
-            continue;
-        }
+		if (ready < 0)
+		{
+			if (shutdownRequested)
+				break;
+			perror("select failed");
+			continue;
+		}
+		else if (ready == 0)
+		{
+			// Timeout; no new connections in this 1-second window
+			continue;
+		}
 
-        // If we get here, the listening socket is readable
-        if (FD_ISSET(s, &readfds))
-        {
-            struct sockaddr_in client_address;
-            socklen_t addr_len = sizeof(client_address);
-            int *new_sock_ptr = new int;
-            *new_sock_ptr = accept(s, (struct sockaddr *)&client_address, &addr_len);
+		// If we get here, the listening socket is readable
+		if (FD_ISSET(s, &readfds))
+		{
+			struct sockaddr_in client_address;
+			socklen_t addr_len = sizeof(client_address);
+			int *new_sock_ptr = new int;
+			*new_sock_ptr = accept(s, (struct sockaddr *)&client_address, &addr_len);
 
-            if (*new_sock_ptr < 0)
-            {
-                if (shutdownRequested)
-                {
-                    delete new_sock_ptr;
-                    break;
-                }
-                if (errno != EAGAIN && errno != EWOULDBLOCK)
-                {
-                    perror("accept failed");
-                }
-                delete new_sock_ptr;
-                continue;
-            }
+			if (*new_sock_ptr < 0)
+			{
+				if (shutdownRequested)
+				{
+					delete new_sock_ptr;
+					break;
+				}
+				if (errno != EAGAIN && errno != EWOULDBLOCK)
+				{
+					perror("accept failed");
+				}
+				delete new_sock_ptr;
+				continue;
+			}
 
 			// If accept succeeded we have a valid connection socket in the pointer
 			// We create a new thread to handle the client
-            pthread_t threadId;
-            if (pthread_create(&threadId, nullptr, handle_single_thread, new_sock_ptr) != 0)
-            {
-                std::cerr << "Error creating thread for new client." << std::endl;
-                close(*new_sock_ptr);
-                delete new_sock_ptr;
-            }
-            else
-            {
-                pthread_detach(threadId);
-            }
-        }
+			pthread_t threadId;
+			if (pthread_create(&threadId, nullptr, handle_single_thread, new_sock_ptr) != 0)
+			{
+				std::cerr << "Error creating thread for new client." << std::endl;
+				close(*new_sock_ptr);
+				delete new_sock_ptr;
+			}
+			else
+			{
+				pthread_detach(threadId);
+			}
+		}
 	}
-    close(s);
-    return 0;
+	close(s);
+	return 0;
 }

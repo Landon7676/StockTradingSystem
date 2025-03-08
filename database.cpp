@@ -5,6 +5,8 @@
 #include <string>
 #include "database.h"
 #include <iostream>
+#include <sstream>
+
 
 bool openDatabase(sqlite3 **db, const std::string &dbName)
 {
@@ -518,52 +520,140 @@ bool sellStock(const std::string &stock_symbol,
     sqlite3_close(db);
     return true;
 }
+bool depositAmount(int user_id, double amount, const std::string &dbName)
+{
+    sqlite3 *db;
+    if (!openDatabase(&db, dbName)) return false;
+
+    const char *sql = "UPDATE Users SET usd_balance = usd_balance + ? WHERE ID = ?;";
+    sqlite3_stmt *stmt;
+    
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    {
+        sqlite3_close(db);
+        return false;
+    }
+
+    sqlite3_bind_double(stmt, 1, amount);
+    sqlite3_bind_int(stmt, 2, user_id);
+    
+    bool success = (sqlite3_step(stmt) == SQLITE_DONE);
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return success;
+}
+double getUserBalance(int user_id, const std::string &dbName)
+{
+    sqlite3 *db;
+    if (!openDatabase(&db, dbName)) return -1;
+
+    const char *query = "SELECT usd_balance FROM Users WHERE ID = ?;";
+    sqlite3_stmt *stmt;
+    double balance = -1;
+
+    if (sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) == SQLITE_OK)
+    {
+        sqlite3_bind_int(stmt, 1, user_id);
+        if (sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            balance = sqlite3_column_double(stmt, 0);
+        }
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return balance;
+}
+std::string lookupStock(int user_id, const std::string &ticker, const std::string &dbName)
+{
+    sqlite3 *db;
+    if (!openDatabase(&db, dbName)) return "";
+
+    const char *sql = "SELECT stock_symbol, stock_balance FROM Stocks WHERE user_id = ? AND stock_symbol LIKE ?;";
+    sqlite3_stmt *stmt;
+    std::ostringstream stockInfo;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK)
+    {
+        std::string searchPattern = ticker + "%";
+        sqlite3_bind_int(stmt, 1, user_id);
+        sqlite3_bind_text(stmt, 2, searchPattern.c_str(), -1, SQLITE_STATIC);
+
+        while (sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            stockInfo << sqlite3_column_text(stmt, 0) << " " << sqlite3_column_double(stmt, 1) << "\n";
+        }
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return stockInfo.str();
+}
+
+
+
 bool listStock(const std::string &dbName, int user_id)
 {
     sqlite3 *db;
     sqlite3_stmt *stmt;
-
-    if (openDatabase(&db, dbName))
-    {
-        const char *listStocksSQL = "SELECT id, stock_symbol, stock_balance, user_id FROM Stocks WHERE user_id = ?;";
-
-        // Prepare the SQL query
-        if (sqlite3_prepare_v2(db, listStocksSQL, -1, &stmt, nullptr) != SQLITE_OK)
-        {
-            std::cerr << "Error preparing LIST query: " << sqlite3_errmsg(db) << std::endl;
-            sqlite3_finalize(stmt);
-            sqlite3_close(db);
-            return false;
-        }
-
-        // Bind user_id to the query
-        sqlite3_bind_int(stmt, 1, user_id);
-
-        // Iterate through the results
-        while (sqlite3_step(stmt) == SQLITE_ROW)
-        {
-            int id = sqlite3_column_int(stmt, 0);
-            const char *stock_symbol = (const char *)sqlite3_column_text(stmt, 1);
-            double stock_balance = sqlite3_column_double(stmt, 2);
-            int user_id = sqlite3_column_int(stmt, 3);
-
-            // Print or process the stock record (you could also return this data)
-            std::cout << "ID: " << id << ", Symbol: " << stock_symbol
-                      << ", Balance: " << stock_balance << ", User ID: " << user_id << std::endl;
-        }
-
-        // Clean up
-        sqlite3_finalize(stmt);
-        sqlite3_close(db);
-    }
-    else
+    
+    if (!openDatabase(&db, dbName))
     {
         std::cerr << "Failed to open the database!" << std::endl;
         return false;
     }
 
+    std::ostringstream query;
+    
+    if (user_id == 1) // Root user can list all stocks
+    {
+        query << "SELECT id, stock_symbol, stock_balance, user_id FROM Stocks;";
+    }
+    else // Regular users only see their own stocks
+    {
+        query << "SELECT id, stock_symbol, stock_balance, user_id FROM Stocks WHERE user_id = ?;";
+    }
+
+    const std::string queryStr = query.str();
+    
+    if (sqlite3_prepare_v2(db, queryStr.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
+    {
+        std::cerr << "Error preparing LIST query: " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return false;
+    }
+
+    if (user_id != 1) // Only bind parameter for non-root users
+    {
+        sqlite3_bind_int(stmt, 1, user_id);
+    }
+
+    std::cout << "200 OK\nThe list of stocks:\n";
+
+    while (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        int id = sqlite3_column_int(stmt, 0);
+        const char *stock_symbol = (const char *)sqlite3_column_text(stmt, 1);
+        double stock_balance = sqlite3_column_double(stmt, 2);
+        int user_id = sqlite3_column_int(stmt, 3);
+
+        if (user_id == 1) // Root user sees all records
+        {
+            std::cout << id << " " << stock_symbol << " " << stock_balance << " User: " << user_id << std::endl;
+        }
+        else // Regular user sees only their stocks
+        {
+            std::cout << id << " " << stock_symbol << " " << stock_balance << std::endl;
+        }
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+
     return true;
 }
+
 bool getUserBalance(int user_id, std::string &first_name, std::string &last_name, double &usd_balance, const std::string &dbName)
 {
     sqlite3 *db;
