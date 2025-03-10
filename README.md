@@ -94,9 +94,15 @@ rm -f server client sqlite3.o client.o database.o server.o trading.db
 
 ### **Jackson Harwick**
 
+# **Project 1**
 - Implemented **BUY**, **SELL**, **SHUTDOWN**, and **QUIT** commands.
 - Wrote the **README** file.
 - Integrated these commands into both the **client** and **server**.
+
+# **Project 2**
+- Implemented multithreading to deal with multiple clients at a time, putting all commands into a seperate function on **server.cpp**.
+- Updated **LIST** command.
+- Implemented **SHUTDOWN** (If you are root user), **LOGIN**, and **LOGOUT** commands.
 
 ### **Landon Johnson**
 
@@ -106,7 +112,7 @@ rm -f server client sqlite3.o client.o database.o server.o trading.db
 - Integrated these commands into the **client** and **server**.
 
 # **Project 2**
-- Implemted **WHO**, **DEPOSIT**, and **LOOKUP** commands.
+- Implemented **WHO**, **DEPOSIT**, and **LOOKUP** commands.
 - Updated **buyStock function** .
 - Integrated these commands into both the  **client** and **server**.
 ---
@@ -114,13 +120,9 @@ rm -f server client sqlite3.o client.o database.o server.o trading.db
 ## **Bugs**
 
 - Header file behaves as if it is not included but still functions when explicitly included.
-- Needed to specify version of C++ to compile server
-
----
-
-## **To Do**
-
-- LOGOUT, WHO, DEPOSIT, LOOKUP
+- Needed to specify version of C++ to compile server.
+- Can buy stocks for other users.
+- Shows invalid command when attempting to shutdown not via a root user despite it being valid, it should only show you do not have permissions.
 
 ---
 

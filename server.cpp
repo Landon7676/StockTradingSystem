@@ -14,7 +14,7 @@
 #include <fcntl.h>
 #include <cerrno>
 
-#define SERVER_PORT 5432
+#define SERVER_PORT 5431
 #define MAX_PENDING 5
 #define MAX_LINE 256
 
@@ -312,48 +312,55 @@ void *handle_single_thread(void *client_socket)
 				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
 				continue;
 			}
-			// Log received command
+		
+			// Determine the current user ID
+			int currentUserId = userIterator->second;
 			std::cout << "s: Received: LIST" << std::endl;
-
+		
 			// Prepare the response
 			std::ostringstream response;
-
-			// Initialize the SQLite database pointer and statement pointer
+		
+			// Open the database
 			sqlite3 *db;
 			sqlite3_stmt *stmt;
-			const char *dbName = "trading.db"; // Ensure this is your database path
-
 			if (openDatabase(&db, dbName))
 			{
+				// Make sure the Stocks table exists
 				const char *schemaQuery = "SELECT name FROM sqlite_master WHERE type='table' AND name='Stocks';";
-
-				// Prepare the schema query to check if 'Stocks' table exists
 				int schemaRc = sqlite3_prepare_v2(db, schemaQuery, -1, &stmt, nullptr);
 				if (schemaRc != SQLITE_OK)
 				{
 					std::cerr << "Failed to prepare schema query: " << sqlite3_errmsg(db) << std::endl;
 					sqlite3_finalize(stmt);
 					sqlite3_close(db);
-					return 0; // Stop further execution if schema query fails
+					continue;
 				}
-
-				if (sqlite3_step(stmt) == SQLITE_ROW)
-				{
-					std::cout << "Stocks table exists." << std::endl;
-				}
-				else
+		
+				if (sqlite3_step(stmt) != SQLITE_ROW)
 				{
 					std::cout << "Stocks table does not exist." << std::endl;
 					sqlite3_finalize(stmt);
 					sqlite3_close(db);
-					return 0; // Stop if the table does not exist
+					continue;
 				}
-				sqlite3_finalize(stmt); // Finalize the schema check statement
-
-				const char *query = "SELECT ID, stock_symbol, stock_name, stock_balance, user_id FROM Stocks;";
-
-				// Prepare the SELECT statement to get stocks
-				int rc = sqlite3_prepare_v2(db, query, -1, &stmt, nullptr);
+				sqlite3_finalize(stmt);
+		
+				// Build the SELECT statement depending on whether the user is root or not
+				std::string query;
+				if (currentUserId == 1)
+				{
+					// Root user sees ALL stocks
+					query = "SELECT ID, stock_symbol, stock_name, stock_balance, user_id FROM Stocks;";
+				}
+				else
+				{
+					// Non-root user sees ONLY their own stocks
+					query = "SELECT ID, stock_symbol, stock_name, stock_balance, user_id "
+							"FROM Stocks WHERE user_id = ?;";
+				}
+		
+				// Prepare the query
+				int rc = sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr);
 				if (rc != SQLITE_OK)
 				{
 					std::cerr << "Failed to prepare SELECT statement: " << sqlite3_errmsg(db) << std::endl;
@@ -361,29 +368,39 @@ void *handle_single_thread(void *client_socket)
 					sqlite3_close(db);
 					std::string errorMsg = "400 Bad Request: Unable to list stocks\n";
 					send(sock, errorMsg.c_str(), errorMsg.length(), 0);
-					return 0; // Stop further execution if query preparation fails
+					continue;
 				}
-
-				// Start building the response
+		
+				// If not root, bind the user’s ID
+				if (currentUserId != 1)
+				{
+					sqlite3_bind_int(stmt, 1, currentUserId);
+				}
+		
+				// Build the response header
 				response << "200 OK\nThe list of stocks:\n";
-
-				// Iterate over the query results
+		
+				// Read each row from the query result
 				while (sqlite3_step(stmt) == SQLITE_ROW)
 				{
 					int stock_id = sqlite3_column_int(stmt, 0);
-					const char *stock_symbol = (const char *)sqlite3_column_text(stmt, 1);
-					const char *stock_name = (const char *)sqlite3_column_text(stmt, 2);
+					const char* stock_symbol = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+					const char* stock_name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
 					double stock_balance = sqlite3_column_double(stmt, 3);
 					int user_id = sqlite3_column_int(stmt, 4);
-
-					// Append the data to the response
-					response << stock_id << " " << stock_symbol << " " << stock_name << " " << stock_balance << " " << user_id << "\n";
+		
+					response << stock_id << " "
+							 << (stock_symbol ? stock_symbol : "") << " "
+							 << (stock_name ? stock_name : "") << " "
+							 << stock_balance << " "
+							 << user_id << "\n";
 				}
-
-				sqlite3_finalize(stmt); // Finalize the SELECT statement
-				sqlite3_close(db);		// Close the database connection
-
-				// Send the response to the client
+		
+				// Finalize and close
+				sqlite3_finalize(stmt);
+				sqlite3_close(db);
+		
+				// Send the response back to the client
 				send(sock, response.str().c_str(), response.str().length(), 0);
 			}
 			else
@@ -392,6 +409,7 @@ void *handle_single_thread(void *client_socket)
 				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
 			}
 		}
+		
 		else if (command == "BALANCE")
 		{
 			// Check if the user is logged in
