@@ -21,6 +21,7 @@
 static bool shutdownRequested = false;
 static const std::string dbName = "trading.db";
 static std::map<int, int> socketToUserId;
+std::map<int, std::string> socketToIP;
 
 /**
  *Function used to handle a single client's connection and also moved the per-client while loop here,
@@ -312,14 +313,14 @@ void *handle_single_thread(void *client_socket)
 				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
 				continue;
 			}
-		
+
 			// Determine the current user ID
 			int currentUserId = userIterator->second;
 			std::cout << "s: Received: LIST" << std::endl;
-		
+
 			// Prepare the response
 			std::ostringstream response;
-		
+
 			// Open the database
 			sqlite3 *db;
 			sqlite3_stmt *stmt;
@@ -335,7 +336,7 @@ void *handle_single_thread(void *client_socket)
 					sqlite3_close(db);
 					continue;
 				}
-		
+
 				if (sqlite3_step(stmt) != SQLITE_ROW)
 				{
 					std::cout << "Stocks table does not exist." << std::endl;
@@ -344,7 +345,7 @@ void *handle_single_thread(void *client_socket)
 					continue;
 				}
 				sqlite3_finalize(stmt);
-		
+
 				// Build the SELECT statement depending on whether the user is root or not
 				std::string query;
 				if (currentUserId == 1)
@@ -358,7 +359,7 @@ void *handle_single_thread(void *client_socket)
 					query = "SELECT ID, stock_symbol, stock_name, stock_balance, user_id "
 							"FROM Stocks WHERE user_id = ?;";
 				}
-		
+
 				// Prepare the query
 				int rc = sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr);
 				if (rc != SQLITE_OK)
@@ -370,36 +371,36 @@ void *handle_single_thread(void *client_socket)
 					send(sock, errorMsg.c_str(), errorMsg.length(), 0);
 					continue;
 				}
-		
+
 				// If not root, bind the user’s ID
 				if (currentUserId != 1)
 				{
 					sqlite3_bind_int(stmt, 1, currentUserId);
 				}
-		
+
 				// Build the response header
 				response << "200 OK\nThe list of stocks:\n";
-		
+
 				// Read each row from the query result
 				while (sqlite3_step(stmt) == SQLITE_ROW)
 				{
 					int stock_id = sqlite3_column_int(stmt, 0);
-					const char* stock_symbol = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-					const char* stock_name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+					const char *stock_symbol = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1));
+					const char *stock_name = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
 					double stock_balance = sqlite3_column_double(stmt, 3);
 					int user_id = sqlite3_column_int(stmt, 4);
-		
+
 					response << stock_id << " "
 							 << (stock_symbol ? stock_symbol : "") << " "
 							 << (stock_name ? stock_name : "") << " "
 							 << stock_balance << " "
 							 << user_id << "\n";
 				}
-		
+
 				// Finalize and close
 				sqlite3_finalize(stmt);
 				sqlite3_close(db);
-		
+
 				// Send the response back to the client
 				send(sock, response.str().c_str(), response.str().length(), 0);
 			}
@@ -409,7 +410,7 @@ void *handle_single_thread(void *client_socket)
 				send(sock, errorMsg.c_str(), errorMsg.length(), 0);
 			}
 		}
-		
+
 		else if (command == "BALANCE")
 		{
 			// Check if the user is logged in
@@ -537,10 +538,14 @@ void *handle_single_thread(void *client_socket)
 }
 std::string getActiveUsers()
 {
-    std::ostringstream users;
+	std::ostringstream users;
     for (const auto &entry : socketToUserId)
     {
-        users << "UserID: " << entry.second << " (Socket: " << entry.first << ")\n";
+        int sock = entry.first;
+        int user_id = entry.second;
+        std::string ip_address = socketToIP[sock]; // Get IP from new map
+
+        users << "UserID: " << user_id << " (IP: " << ip_address << ")\n";
     }
     return users.str();
 }
@@ -622,6 +627,18 @@ int main()
 			socklen_t addr_len = sizeof(client_address);
 			int *new_sock_ptr = new int;
 			*new_sock_ptr = accept(s, (struct sockaddr *)&client_address, &addr_len);
+
+			if (*new_sock_ptr >= 0)
+			{
+				// Convert IP address to string
+				char client_ip[INET_ADDRSTRLEN];
+				inet_ntop(AF_INET, &(client_address.sin_addr), client_ip, INET_ADDRSTRLEN);
+
+				// Store socket-to-IP mapping
+				socketToIP[*new_sock_ptr] = std::string(client_ip);
+
+				std::cout << "[INFO] Client connected: " << client_ip << std::endl;
+			}
 
 			if (*new_sock_ptr < 0)
 			{
